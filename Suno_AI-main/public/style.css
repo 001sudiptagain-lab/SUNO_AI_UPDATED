@@ -839,6 +839,683 @@ html, body {
   gap: 10px;
 }
 
+/* Live Mood Detector Indicator Pills */
+.aura-mood-indicator-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 175, 210, 0.22);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  user-select: none;
+}
+
+.aura-mood-indicator-pill.mood-good {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #bbf7d0;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.25);
+}
+
+.aura-mood-indicator-pill.mood-bad {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(248, 113, 113, 0.48);
+  color: #fecaca;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.28);
+}
+
+.aura-mood-indicator-pill.mood-neutral {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 175, 210, 0.25);
+  color: rgba(255, 240, 248, 0.88);
+}
+
+.mood-indicator-dot,
+.live-mood-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.aura-mood-indicator-pill.mood-good .mood-indicator-dot,
+.live-voice-mood-pill.mood-good .live-mood-dot {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.aura-mood-indicator-pill.mood-bad .mood-indicator-dot,
+.live-voice-mood-pill.mood-bad .live-mood-dot {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+.aura-mood-indicator-pill.mood-neutral .mood-indicator-dot,
+.live-voice-mood-pill.mood-neutral .live-mood-dot {
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.mood-indicator-emoji,
+.live-mood-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* In-Card Live Voice Stage Mood Pill / Data Trigger Button */
+.live-voice-mood-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 175, 210, 0.24);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: all 0.25s ease;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.live-voice-mood-pill:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 175, 210, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.live-voice-mood-pill:active {
+  transform: scale(0.97);
+}
+
+.live-voice-mood-pill.mood-good {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #bbf7d0;
+}
+
+.live-voice-mood-pill.mood-bad {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fecaca;
+}
+
+.live-voice-mood-pill.mood-neutral {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 175, 210, 0.24);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* =========================================================
+   LIVE MOOD & STRESS DATA POPUP (DEEP GLASS CARD)
+   ========================================================= */
+.voice-data-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.voice-data-trigger-btn {
+  gap: 7px !important;
+}
+
+.voice-data-trigger-btn .voice-data-chevron {
+  color: rgba(255, 255, 255, 0.75);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-left: 2px;
+}
+
+.voice-data-wrapper.open .voice-data-trigger-btn {
+  border-color: #ffa3c4 !important;
+  box-shadow: 0 0 0 2px rgba(255, 163, 196, 0.35), 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+.voice-data-wrapper.open .voice-data-chevron {
+  transform: rotate(180deg);
+  color: #ffffff;
+}
+
+/* Deep Glassy Pop-up Box (Multi-Page System) */
+.voice-data-card-popup {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 330px;
+  background: rgba(16, 4, 14, 0.94);
+  border: 1px solid rgba(255, 175, 210, 0.28);
+  border-radius: 20px;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 30px rgba(216, 69, 137, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  padding: 18px 20px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px) scale(0.96);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  color: #ffffff;
+}
+
+.voice-data-wrapper.open .voice-data-card-popup {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+/* Page Views switcher */
+.vd-view-page {
+  display: none;
+  flex-direction: column;
+  width: 100%;
+}
+
+.vd-view-page.active {
+  display: flex;
+}
+
+/* Page 1: Top Status Row */
+.vd-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.vd-top-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vd-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.vd-status-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.1px;
+}
+
+.vd-top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vd-latency-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.vd-latency-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #86efac;
+}
+
+/* Split Grid Layout (Page 1) */
+.vd-split-grid {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+}
+
+/* Left Column: SVI Metric */
+.vd-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vd-svi-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vd-svi-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+
+.vd-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  font-style: italic;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: help;
+  user-select: none;
+}
+
+.vd-svi-score {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 1px 0 3px 0;
+}
+
+.vd-svi-num {
+  font-size: 24px;
+  font-weight: 800;
+  color: #22c55e;
+  line-height: 1;
+  transition: color 0.25s ease;
+}
+
+.vd-svi-num.status-low {
+  color: #22c55e !important;
+}
+
+.vd-svi-num.status-moderate {
+  color: #facc15 !important;
+}
+
+.vd-svi-num.status-high {
+  color: #ef4444 !important;
+  text-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+}
+
+.vd-svi-denom {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 200, 225, 0.55);
+}
+
+/* Metric Badge Pill */
+.vd-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: var(--radius-pill);
+  padding: 3px 12px;
+  color: #86efac;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+  width: fit-content;
+  transition: all 0.2s ease;
+}
+
+.vd-badge-pill.status-low {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #86efac;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+}
+
+.vd-badge-pill.status-moderate {
+  background: rgba(234, 179, 8, 0.16);
+  border-color: rgba(250, 204, 21, 0.4);
+  color: #fef08a;
+  box-shadow: 0 0 10px rgba(234, 179, 8, 0.2);
+}
+
+.vd-badge-pill.status-high {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+/* Trend Tag */
+.vd-trend-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.vd-trend-arrow {
+  color: #22c55e;
+  font-weight: 800;
+  transition: color 0.25s ease;
+}
+
+.vd-trend-arrow.status-low {
+  color: #22c55e !important;
+}
+
+.vd-trend-arrow.status-moderate {
+  color: #facc15 !important;
+}
+
+.vd-trend-arrow.status-high {
+  color: #ef4444 !important;
+}
+
+/* Vertical Column Divider */
+.vd-col-divider {
+  width: 1px;
+  height: 95px;
+  background: rgba(255, 175, 210, 0.18);
+  flex-shrink: 0;
+}
+
+/* Right Column: Key Details */
+.vd-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1.25;
+  min-width: 0;
+}
+
+.vd-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.vd-row-label {
+  color: rgba(255, 210, 230, 0.7);
+  font-weight: 500;
+}
+
+.vd-row-val {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.vd-row-val-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Mood Mini Badge (No Emoji) */
+.vd-mood-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.vd-mood-dot {
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.vd-mood-badge.mood-calm .vd-mood-dot,
+.vd-mood-badge.mood-good .vd-mood-dot {
+  background: #22c55e;
+}
+
+.vd-mood-badge.mood-distressed .vd-mood-dot,
+.vd-mood-badge.mood-bad .vd-mood-dot {
+  background: #ef4444;
+}
+
+.vd-mood-badge.mood-neutral .vd-mood-dot {
+  background: #38bdf8;
+}
+
+.vd-distress-val {
+  color: #f472b6;
+}
+
+.vd-fear-val {
+  color: #facc15;
+}
+
+.vd-lang-val {
+  color: #ffffff;
+}
+
+/* Navigation Arrow Button (Next Page) */
+.vd-nav-next-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 200, 225, 0.75);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.vd-nav-next-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateX(2px);
+}
+
+/* =========================================================
+   PAGE 2: ASSESSMENT & ALL-INDIA HELPLINES
+   ========================================================= */
+.vd-page2-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.vd-page2-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vd-page-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #86efac;
+}
+
+.vd-page-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.vd-close-icon-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 200, 225, 0.7);
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.18s ease;
+}
+
+.vd-close-icon-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.vd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.vd-section-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.1px;
+}
+
+.vd-indicator-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vd-indicator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+}
+
+.vd-ind-label {
+  color: rgba(255, 200, 225, 0.7);
+}
+
+.vd-ind-status {
+  font-weight: 600;
+}
+
+.vd-ind-status.safe {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.vd-ind-status.elevated {
+  color: #facc15;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.4);
+}
+
+.vd-ind-status.alert {
+  color: #ef4444;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.vd-support-items {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.vd-support-text {
+  font-size: 11.5px;
+  color: rgba(255, 220, 235, 0.85);
+  line-height: 1.35;
+}
+
+/* All India Mental Health Helplines Box */
+.vd-helpline-box {
+  background: rgba(36, 9, 30, 0.65);
+  border: 1px solid rgba(255, 175, 210, 0.22);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.vd-helpline-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffa3c4;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.vd-helpline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  gap: 6px;
+}
+
+.vd-hl-name {
+  color: rgba(255, 220, 235, 0.8);
+  white-space: nowrap;
+}
+
+.vd-hl-num {
+  color: #86efac;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.vd-hl-num:hover {
+  text-decoration: underline;
+  color: #bbf7d0;
+}
+
+.vd-page2-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.vd-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 175, 210, 0.25);
+  border-radius: 10px;
+  padding: 6px 14px;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vd-back-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 175, 210, 0.5);
+  transform: translateX(-2px);
+}
+
 /* Voice Mode Waveform Button */
 .aura-voice-mode-trigger {
   display: flex;
@@ -1640,25 +2317,6 @@ html, body {
   transform: scale(1.06);
 }
 
-.voice-top-icon-btn.voice-preview-btn {
-  color: #ffa3c4 !important;
-  background: rgba(255, 105, 180, 0.12) !important;
-  border-color: rgba(255, 163, 196, 0.3) !important;
-}
-
-.voice-top-icon-btn.voice-preview-btn:hover {
-  background: rgba(255, 105, 180, 0.28) !important;
-  border-color: rgba(255, 163, 196, 0.6) !important;
-  color: #ffffff !important;
-  box-shadow: 0 0 16px rgba(255, 105, 180, 0.4) !important;
-}
-
-.voice-top-icon-btn.voice-preview-btn.playing {
-  background: linear-gradient(135deg, rgba(216, 69, 137, 0.8) 0%, rgba(255, 122, 169, 0.8) 100%) !important;
-  color: #ffffff !important;
-  animation: pulseDot 1.4s infinite alternate;
-}
-
 .voice-top-icon-btn.close-voice-action {
   color: rgba(255, 255, 255, 0.9) !important;
 }
@@ -1718,6 +2376,44 @@ html, body {
   box-shadow: 0 0 0 2px rgba(255, 163, 196, 0.35) !important;
 }
 
+/* Fixed Permanent Sizing for Voice Header Dropdown Pills */
+.voice-top-right-tools #liveVoiceLangSelect {
+  width: 175px !important;
+  min-width: 175px !important;
+  max-width: 175px !important;
+  box-sizing: border-box !important;
+}
+
+.voice-top-right-tools #liveMicDeviceSelect {
+  width: 185px !important;
+  min-width: 185px !important;
+  max-width: 185px !important;
+  box-sizing: border-box !important;
+}
+
+/* Custom JS Dropdown Container Fixed Sizing */
+.voice-top-right-tools .custom-select-wrapper {
+  width: auto !important;
+  min-width: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Language Dropdown permanent size */
+.voice-top-right-tools .custom-select-lang,
+.voice-top-right-tools .custom-select-wrapper:has(#liveVoiceLangSelect) {
+  width: 175px !important;
+  min-width: 175px !important;
+  max-width: 175px !important;
+}
+
+/* Microphone Dropdown permanent size */
+.voice-top-right-tools .custom-select-mic,
+.voice-top-right-tools .custom-select-wrapper:has(#liveMicDeviceSelect) {
+  width: 185px !important;
+  min-width: 185px !important;
+  max-width: 185px !important;
+}
+
 /* Custom JS Select Trigger inside Voice Header - Translucent Frosted Glass Pill */
 .voice-top-right-tools .custom-select-trigger {
   background: rgba(255, 255, 255, 0.12) !important;
@@ -1728,8 +2424,30 @@ html, body {
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
-  padding: 8px 18px !important;
+  padding: 8px 14px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Fixed Permanent Label inside Trigger */
+.voice-top-right-tools .custom-select-trigger .custom-select-label {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  text-align: left !important;
+}
+
+.voice-top-right-tools .custom-select-trigger .custom-select-chevron {
+  flex-shrink: 0 !important;
 }
 
 .voice-top-right-tools .custom-select-trigger:hover {
@@ -1757,13 +2475,15 @@ html, body {
 
 /* Custom JS Dropdown Menu inside Voice Header - Dark Frosted Glass Menu */
 .voice-top-right-tools .custom-select-menu {
-  background: rgba(30, 8, 25, 0.88) !important;
+  background: rgba(30, 8, 25, 0.92) !important;
   border: 1px solid rgba(255, 175, 210, 0.35) !important;
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 24px rgba(215, 65, 135, 0.25) !important;
   border-radius: var(--radius-xl) !important;
   padding: 6px !important;
+  min-width: 200px !important;
+  max-width: 320px !important;
 }
 
 .voice-top-right-tools .custom-select-option {
@@ -1785,6 +2505,12 @@ html, body {
   border: 1px solid rgba(255, 175, 210, 0.5) !important;
   color: #ffffff !important;
   font-weight: 700 !important;
+}
+
+/* Header Mood Detector Pill (Next to Mic Device Option) */
+.voice-top-right-tools .live-voice-mood-pill {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
 }
 
 /* Hardware Microphone Live Signal Level Indicator */
@@ -1830,25 +2556,23 @@ html, body {
 /* Dynamic Multi-Harmonic Circular Quantum Audio Stage (Unconstrained Open Box) */
 .voice-wave-ribbon-wrapper {
   position: relative;
-  width: 270px;
-  height: 270px;
-  max-height: 35vh;
+  width: 380px;
+  height: 380px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 6px auto;
+  margin: 0 auto 8px auto;
   overflow: visible;
-  flex-shrink: 1;
 }
 
 #liveVoiceWaveCanvas {
   position: absolute;
   top: 0;
   left: 0;
-  width: 270px;
-  height: 270px;
+  width: 380px;
+  height: 380px;
   display: block;
-  filter: drop-shadow(0 0 35px rgba(255, 80, 150, 0.35));
+  filter: drop-shadow(0 0 45px rgba(255, 80, 150, 0.35));
   z-index: 1;
 }
 
@@ -1856,8 +2580,8 @@ html, body {
 .voice-central-s-emblem {
   position: relative;
   z-index: 2;
-  width: 140px;
-  height: 140px;
+  width: 195px;
+  height: 195px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1874,7 +2598,7 @@ html, body {
   object-fit: contain;
   border-radius: 0 !important;
   display: block;
-  filter: drop-shadow(0 0 24px rgba(255, 79, 147, 0.65)) drop-shadow(0 0 40px rgba(216, 69, 137, 0.4));
+  filter: drop-shadow(0 0 28px rgba(255, 79, 147, 0.65)) drop-shadow(0 0 50px rgba(216, 69, 137, 0.4));
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
   animation: emblemGentleBreathe 4s ease-in-out infinite alternate;
 }
@@ -1882,73 +2606,58 @@ html, body {
 @keyframes emblemGentleBreathe {
   0% {
     transform: scale(0.98);
-    filter: drop-shadow(0 0 20px rgba(255, 79, 147, 0.6)) drop-shadow(0 0 36px rgba(216, 69, 137, 0.35));
+    filter: drop-shadow(0 0 24px rgba(255, 79, 147, 0.6)) drop-shadow(0 0 44px rgba(216, 69, 137, 0.35));
   }
   100% {
     transform: scale(1.03);
-    filter: drop-shadow(0 0 28px rgba(255, 122, 169, 0.8)) drop-shadow(0 0 50px rgba(255, 79, 147, 0.5));
+    filter: drop-shadow(0 0 32px rgba(255, 122, 169, 0.8)) drop-shadow(0 0 60px rgba(255, 79, 147, 0.5));
   }
 }
 
 /* Floating Subtitle Captions Feed - Alfred Clean Elegant Typography */
 .floating-dialogue-lower.modern-dialogue-feed {
   width: 100%;
-  max-width: 680px;
+  max-width: 720px;
   text-align: center;
-  min-height: 50px;
-  max-height: 120px;
+  min-height: 74px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 18px;
-  margin: 4px 0 10px 0;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.floating-dialogue-lower.modern-dialogue-feed::-webkit-scrollbar {
-  display: none;
+  padding: 0 20px;
+  margin: 8px 0 16px 0;
 }
 
 .live-transcript-user {
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 500;
   color: rgba(255, 220, 235, 0.72);
-  margin-bottom: 4px;
-  line-height: 1.4;
+  margin-bottom: 6px;
+  line-height: 1.5;
   letter-spacing: -0.1px;
 }
 
 .live-transcript-ai {
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 600;
   color: #ffffff;
-  line-height: 1.45;
+  line-height: 1.5;
   letter-spacing: -0.2px;
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.3);
-  max-height: 85px;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.live-transcript-ai::-webkit-scrollbar {
-  display: none;
 }
 
 /* Realtime State Indicator Pill (Alfred Minimalist Pill) */
 .aura-state-indicator.modern-state-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
+  gap: 9px;
+  padding: 7px 18px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  margin-bottom: 4px;
 }
 
 .stardust-glow {
@@ -2008,15 +2717,12 @@ html, body {
    BOTTOM UNIFIED CONTROL DOCK (ALFRED GLASS PILL + RADIANT SEND)
    ========================================================= */
 .live-voice-dock.modern-voice-dock {
-  padding: 10px 24px 20px 24px;
+  padding: 0 24px 32px 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   z-index: 20;
-  flex-shrink: 0;
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .modern-dock-unified-bar {
@@ -3041,8 +3747,22 @@ html, body {
   .voice-top-right-tools .custom-select-wrapper {
     min-width: 0 !important;
     width: auto !important;
-    flex-shrink: 1 !important;
+    flex-shrink: 0 !important;
     position: relative !important;
+  }
+
+  .voice-top-right-tools .custom-select-lang,
+  .voice-top-right-tools .custom-select-wrapper:has(#liveVoiceLangSelect) {
+    width: 110px !important;
+    min-width: 110px !important;
+    max-width: 110px !important;
+  }
+
+  .voice-top-right-tools .custom-select-mic,
+  .voice-top-right-tools .custom-select-wrapper:has(#liveMicDeviceSelect) {
+    width: 115px !important;
+    min-width: 115px !important;
+    max-width: 115px !important;
   }
 
   .voice-top-right-tools .custom-select-menu {
@@ -3059,7 +3779,7 @@ html, body {
   .voice-top-right-tools .custom-select-trigger {
     padding: 6px 8px !important;
     font-size: 11.5px !important;
-    max-width: 95px !important;
+    width: 100% !important;
     min-width: 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -3068,9 +3788,16 @@ html, body {
   }
 
   .voice-top-right-tools .custom-select-trigger .custom-select-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .voice-data-card-popup {
+    width: 290px !important;
+    max-width: 90vw !important;
+    right: 0 !important;
+    padding: 14px 16px !important;
   }
 
   #liveMicDeviceSelect {

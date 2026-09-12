@@ -61,12 +61,10 @@
       this.audioContext = null;
       this.mediaStream = null;
       this.inputSource = null;
-      this.inputGain = null; // Dedicated software mute gain to preserve WebAudio clock
       this.inputAnalyser = null;
       this.scriptProcessor = null;
       this.userSpeechActive = false;
       this.vadSilenceTimer = null;
-      this.keepAliveInterval = null;
 
       // Web Audio Output (Buffer Queue for streaming PCM)
       this.outputAudioContext = null;
@@ -115,8 +113,8 @@
     // STATE & EVENT DISPATCH
     // ==========================================
     _setState(newState, payload = {}) {
-      if (this.isMuted && !payload.force && (newState === VoiceState.LISTENING || newState === VoiceState.USER_SPEAKING)) {
-        return; // Never overwrite MUTED state automatically unless forced (e.g. unmuting)
+      if (this.isMuted && (newState === VoiceState.LISTENING || newState === VoiceState.USER_SPEAKING)) {
+        return; // Never overwrite MUTED state automatically
       }
       if (this.state === newState && !payload.force) return;
       this.state = newState;
@@ -176,17 +174,17 @@
         if (deviceId && deviceId !== 'default') {
           try {
             this.mediaStream = await navigator.mediaDevices.getUserMedia({
-              audio: Object.assign({ deviceId: { exact: deviceId } }, baseAudioConstraints)
+              audio: { deviceId: { exact: deviceId } }
             });
           } catch (deviceConstraintErr) {
             console.warn('[Mic] Exact device constraint failed, falling back to default mic:', deviceConstraintErr);
             this.mediaStream = await navigator.mediaDevices.getUserMedia({
-              audio: baseAudioConstraints
+              audio: true
             });
           }
         } else {
           this.mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: baseAudioConstraints
+            audio: true
           });
         }
 
@@ -196,16 +194,10 @@
         this.selectedDeviceId = deviceId || 'default';
 
         this.inputSource = this.audioContext.createMediaStreamSource(this.mediaStream);
-        
-        // Dedicated Input Gain Node for instantaneous, click-free software muting
-        this.inputGain = this.audioContext.createGain();
-        this.inputGain.gain.setValueAtTime(this.isMuted ? 0 : 1, this.audioContext.currentTime);
-        this.inputSource.connect(this.inputGain);
-
         this.inputAnalyser = this.audioContext.createAnalyser();
         this.inputAnalyser.fftSize = 128;
         this.inputAnalyser.smoothingTimeConstant = 0.3;
-        this.inputGain.connect(this.inputAnalyser);
+        this.inputSource.connect(this.inputAnalyser);
 
         // Continuous PCM Streaming via ScriptProcessorNode / AudioWorklet
         const bufferSize = 2048;
@@ -217,17 +209,10 @@
           const inputBuffer = audioProcessingEvent.inputBuffer;
           const inputData = inputBuffer.getChannelData(0);
 
-          // 1. Process Voice Activity Level (VAD) for glowing visualizer & barge-in
+          // 1. Process Voice Activity Level (VAD) for glowing visualizer
           this._processVAD(inputData);
 
-          // 2. Complete Mic Input Cutoff While AI Is Speaking:
-          // When the AI is replying/talking (AI_SPEAKING, playing live PCM queue, or playing TTS),
-          // completely shut off microphone input forwarding to prevent listening and speaking from collapsing.
-          if (this.state === VoiceState.AI_SPEAKING || this.isPlayingQueue || this.isFallbackPlaying) {
-            return;
-          }
-
-          // 3. Forward PCM chunk to backend gateway (only when AI has finished talking and is listening)
+          // 2. If connected to native Gemini Live API session, forward PCM
           if (this.isLiveApiMode && this.ws && this.ws.readyState === WebSocket.OPEN) {
             const pcm16Data = this._resampleAndEncodePCM16(
               inputData,
@@ -244,7 +229,7 @@
           }
         };
 
-        this.inputGain.connect(this.scriptProcessor);
+        this.inputSource.connect(this.scriptProcessor);
         const silentGain = this.audioContext.createGain();
         silentGain.gain.value = 0;
         this.scriptProcessor.connect(silentGain);
@@ -370,12 +355,12 @@
 
       const isSpeech = rms > this.options.vadThreshold;
 
-      // When AI is actively talking, mic input is completely off: ignore speech and do not interrupt
-      if (this.state === VoiceState.AI_SPEAKING || this.isPlayingQueue || this.isFallbackPlaying) {
-        return;
-      }
-
       if (isSpeech && !this.isMuted) {
+        // Only trigger barge-in when live PCM is playing, NOT when browser TTS is speaking (to avoid self-echo cancelling speech)
+        if (this.state === VoiceState.AI_SPEAKING && this.isPlayingQueue && !this.isFallbackPlaying) {
+          this.interrupt();
+        }
+
         if (!this.userSpeechActive) {
           this.userSpeechActive = true;
         }
@@ -606,54 +591,16 @@
         const savedSettings = JSON.parse(localStorage.getItem('aura_settings') || localStorage.getItem('chatgpt_settings') || '{}');
         const effectiveKey = config.apiKey || savedSettings.apiKey || '';
 
-        const activeVoice = (this.selectedLang && this.selectedLang.startsWith('en')) ? 'Aoede' : 'Leda';
-
         this.ws.send(JSON.stringify({
           type: 'session.start',
           history: config.history || [],
           provider: config.provider || savedSettings.provider || 'gemini',
           apiKey: effectiveKey,
-          enableGeminiLive: this.options.enableGeminiLive !== false,
-          language: this.selectedLang || 'en-US',
-          voice: activeVoice,
-          model: 'gemini-2.5-flash-native-audio-latest'
+          enableGeminiLive: false,
+          model: 'gemini-3.7-flash'
         }));
 
         this._setState(VoiceState.LISTENING);
-
-        // Keep-Alive & AudioContext Watchdog:
-        // Runs every 5 seconds. If the user is silent for 30s - 2min:
-        // 1. Keeps AudioContext alive so Chrome/Windows doesn't suspend it
-        // 2. Sends periodic lightweight ping to server so WebSocket doesn't timeout
-        // 3. Ensures fallback SpeechRecognition remains active if needed
-        if (this.keepAliveInterval) {
-          clearInterval(this.keepAliveInterval);
-        }
-        this.keepAliveInterval = setInterval(() => {
-          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-          // 1. Check and auto-resume AudioContext if browser suspended it during silence
-          if (this.audioContext && this.audioContext.state === 'suspended' && !this.isMuted) {
-            console.log('[VoiceAssistant Watchdog] Auto-resuming suspended AudioContext...');
-            this.audioContext.resume().catch(() => {});
-          }
-
-          // 2. Ping backend gateway every 15s to keep WebSocket and upstream session alive
-          const now = Date.now();
-          if (!this._lastKeepAlivePing || (now - this._lastKeepAlivePing >= 15000)) {
-            this._lastKeepAlivePing = now;
-            try {
-              this.ws.send(JSON.stringify({ type: 'client.keep_alive', timestamp: now }));
-            } catch (_) {}
-          }
-
-          // 3. If in fallback STT mode and recognition stalled during silence, auto-revive it safely
-          if (!this.isLiveApiMode && !this.isMuted &&
-              this.state !== VoiceState.AI_SPEAKING && this.state !== VoiceState.THINKING &&
-              !this.isFallbackPlaying && !this._isSttRunning) {
-            this._safeRestartSpeechRecognition(0);
-          }
-        }, 5000);
       };
 
       this.ws.onmessage = (event) => {
@@ -662,33 +609,42 @@
 
           switch (msg.type) {
             case 'session.ready':
-              this.isLiveApiMode = !!msg.isGeminiLive;
-              console.log(`[VoiceAssistant] Session established. Mode: ${this.isLiveApiMode ? 'Gemini Live Native Audio (' + (msg.voice || 'Aoede') + ')' : 'High-Speed Streaming STT/TTS'}`);
+              this.isLiveApiMode = false;
+              console.log('[VoiceAssistant] Session established. Mode: High-Speed Streaming STT/TTS');
               
-              if (this.isLiveApiMode && !this.mediaStream) {
-                this._initAudioInput(config.deviceId).catch(e => console.warn('[Live Mic Init Error]:', e));
-              }
-
               const currentHistory = config.history || [];
+              // Always initialize speech recognition early so the microphone is ready immediately
+              this._initFallbackSpeechRecognition();
+
               if (!this._hasSpokenIntro && currentHistory.length === 0) {
                 this._hasSpokenIntro = true;
                 this._setState(VoiceState.AI_SPEAKING);
                 
                 let introGreeting = "नमस्ते! मैं SUNO AI हूँ। मुझे सुदीप्ता ने आपके भावनात्मक सहयोग और बातचीत के लिए ट्रेन किया है। बताइए, आज मैं आपकी क्या मदद कर सकती हूँ?";
-                if (this.selectedLang === 'en-US' || (this.selectedLang && this.selectedLang.startsWith('en'))) {
+                if (this.selectedLang === 'en-US') {
                   introGreeting = "Hello! I am SUNO AI, your compassionate companion. I was trained and created by Sudipta. How can I support you today?";
-                } else if (this.selectedLang === 'bn-IN' || (this.selectedLang && this.selectedLang.startsWith('bn'))) {
+                } else if (this.selectedLang === 'bn-IN') {
                   introGreeting = "নমস্কার! আমি SUNO AI। আমাকে সুদীপ্তা তৈরি করেছেন আপনার মানসিক সমর্থন ও বন্ধুত্বের জন্য। বলুন, আজ আপনাকে কীভাবে সাহায্য করতে পারি?";
                 }
                 this._lastAssistantSpokenText = introGreeting;
                 this._emitTranscript('assistant', introGreeting, true);
                 
-                // Play intro greeting FIRST. Speech recognition will ONLY initialize after intro speech concludes!
+                // Play intro greeting with a fail-safe fallback
                 this._enqueueFallbackTTSChunk(introGreeting);
+
+                // Fail-safe safety timeout: if browser autoplay policies block the audio or audio ends silently,
+                // automatically transition to LISTENING after 4 seconds so the UI never gets stuck!
+                setTimeout(() => {
+                  if (this.state === VoiceState.AI_SPEAKING && !this.currentAudioElement && (!this.currentUtterance || window.speechSynthesis.paused)) {
+                    console.log('[VoiceAssistant] Intro safety timeout triggered. Switching to LISTENING.');
+                    this.isFallbackPlaying = false;
+                    this._setState(VoiceState.LISTENING);
+                    if (this.fallbackSpeechRecognition && !this.isMuted) {
+                      try { this.fallbackSpeechRecognition.start(); } catch (e) {}
+                    }
+                  }
+                }, 4000);
               } else {
-                if (!this.isLiveApiMode) {
-                  this._initFallbackSpeechRecognition();
-                }
                 this._setState(VoiceState.LISTENING);
               }
               break;
@@ -701,41 +657,34 @@
               }
               break;
 
-            case 'live.output_transcript':
-              // Verbatim transcription of the exact spoken words from Gemini Live audio output
-              if (msg.fullText || msg.text) {
-                const spokenText = msg.fullText || msg.text;
-                this._lastAssistantSpokenText = spokenText;
-                console.log(`[Live] Spoken transcript update: "${spokenText}"`);
-                this._emitTranscript('assistant', spokenText, false);
-              }
-              break;
-
             case 'live.audio_delta':
               // Streaming 24kHz PCM from Gemini Live
               if (msg.pcmBase64) {
-                this._hasReceivedLiveAudioInTurn = true;
                 this._enqueueIncomingPCMChunk(msg.pcmBase64, msg.sampleRate || 24000);
+              }
+              if (msg.text) {
+                // Filter internal model thought headers if any
+                const cleanText = msg.text.replace(/\*\*Crafting[^*]+\*\*/gi, '').replace(/\*\*Thinking[^*]+\*\*/gi, '').trim();
+                if (cleanText) {
+                  this._emitTranscript('assistant', cleanText, false);
+                }
               }
               break;
 
             case 'live.turn_complete':
               if (msg.fullText) {
-                this._emitTranscript('assistant', msg.fullText, true);
-                // ONLY trigger fallback TTS if Gemini Live is NOT in use and no PCM audio was received
-                if (!this.isLiveApiMode && !this._hasReceivedLiveAudioInTurn && !this.isPlayingQueue && this.audioQueue.length === 0) {
-                  this._enqueueFallbackTTSChunk(msg.fullText);
+                const cleanFull = msg.fullText.replace(/\*\*Crafting[^*]+\*\*/gi, '').replace(/\*\*Thinking[^*]+\*\*/gi, '').trim();
+                this._emitTranscript('assistant', cleanFull, true);
+                if (!this.isPlayingQueue && this.audioQueue.length === 0 && cleanFull) {
+                  this._enqueueFallbackTTSChunk(cleanFull);
                 }
               }
-              this._hasReceivedLiveAudioInTurn = false;
-              // Only return to LISTENING if audio queue is genuinely empty and no audio is currently playing
-              if (!this.isPlayingQueue && this.audioQueue.length === 0 && this.activeSources.length === 0 && !this.isFallbackPlaying) {
+              if (!this.isPlayingQueue && this.audioQueue.length === 0 && !this.isFallbackPlaying) {
                 this._setState(VoiceState.LISTENING);
               }
               break;
 
             case 'response.start':
-              this._hasReceivedLiveAudioInTurn = false;
               this._setState(VoiceState.THINKING);
               break;
 
@@ -770,21 +719,6 @@
               console.warn('[VoiceAssistant] Falling back to chunked pipeline:', msg.reason);
               this.isLiveApiMode = false;
               this._initFallbackSpeechRecognition();
-              break;
-
-            case 'server.pong':
-              // Received pong from backend, connection is healthy
-              break;
-
-            case 'live.reconnected':
-              console.log('[VoiceAssistant] Gemini Live session reconnected successfully.');
-              this.isLiveApiMode = true;
-              if (this.audioContext && this.audioContext.state === 'suspended' && !this.isMuted) {
-                this.audioContext.resume().catch(() => {});
-              }
-              if (!this.isMuted && this.state !== VoiceState.AI_SPEAKING) {
-                this._setState(VoiceState.LISTENING);
-              }
               break;
 
             case 'error':
@@ -888,11 +822,6 @@
         this.ws = null;
       }
 
-      if (this.keepAliveInterval) {
-        clearInterval(this.keepAliveInterval);
-        this.keepAliveInterval = null;
-      }
-
       this.animationLoopActive = false;
       this._setState(VoiceState.IDLE);
     }
@@ -904,6 +833,21 @@
       }
 
       if (typeof content === 'string') {
+        // Immediate interruption: stop any currently playing assistant audio and flush queue
+        if (this.currentAudioElement) {
+          try {
+            this.currentAudioElement.pause();
+            this.currentAudioElement.currentTime = 0;
+          } catch (e) {}
+          this.currentAudioElement = null;
+        }
+        if (window.speechSynthesis) {
+          try { window.speechSynthesis.cancel(); } catch (e) {}
+        }
+        this.currentUtterance = null;
+        this.fallbackSpeechQueue = [];
+        this.isFallbackPlaying = false;
+
         this._emitTranscript('user', content, true);
         this._setState(VoiceState.THINKING);
 
@@ -921,69 +865,18 @@
       }
     }
 
-    // Safe, debounced and state-checked speech recognition starter
-    _safeRestartSpeechRecognition(delayMs = 250) {
-      if (this.isMuted || this.state === VoiceState.AI_SPEAKING || this.state === VoiceState.THINKING || this.isFallbackPlaying) {
-        return;
-      }
-      if (this.isLiveApiMode) {
-        return; // Gemini Live uses raw WebAudio PCM pipeline
-      }
-
-      if (this._sttRestartTimer) {
-        clearTimeout(this._sttRestartTimer);
-      }
-
-      this._sttRestartTimer = setTimeout(() => {
-        this._sttRestartTimer = null;
-        if (this.isMuted || this.state === VoiceState.AI_SPEAKING || this.state === VoiceState.THINKING || this.isFallbackPlaying || this._isSttRunning) {
-          return;
-        }
-
-        if (!this.fallbackSpeechRecognition) {
-          this._initFallbackSpeechRecognition();
-          return;
-        }
-
-        try {
-          this.fallbackSpeechRecognition.start();
-        } catch (err) {
-          // If browser says already started, update flag
-          if (err.name === 'InvalidStateError' || (err.message && err.message.includes('already started'))) {
-            this._isSttRunning = true;
-          } else {
-            console.warn('[VoiceAssistant STT] Restart encountered error, re-initializing instance:', err.message);
-            // Re-create the recognition object so corrupted browser audio handles are discarded
-            try { this.fallbackSpeechRecognition.abort(); } catch (_) {}
-            this.fallbackSpeechRecognition = null;
-            this._isSttRunning = false;
-            this._initFallbackSpeechRecognition();
-          }
-        }
-      }, delayMs);
-    }
-
     setMuted(muted) {
       this.isMuted = !!muted;
       console.log(`[VoiceAssistant] Microphone mute state changed: ${this.isMuted ? 'MUTED' : 'UNMUTED'}`);
 
-      // 1. Hardware-level track mute/unmute
+      // 1. Hardware-level track mute
       if (this.mediaStream) {
         this.mediaStream.getAudioTracks().forEach(track => {
           track.enabled = !this.isMuted;
         });
       }
 
-      // 2. WebAudio Graph Software Gain Muting (Instantaneous & preserves audio clock)
-      if (this.inputGain && this.audioContext) {
-        try {
-          const targetGain = this.isMuted ? 0 : 1;
-          this.inputGain.gain.cancelScheduledValues(this.audioContext.currentTime);
-          this.inputGain.gain.setValueAtTime(targetGain, this.audioContext.currentTime);
-        } catch (e) {}
-      }
-
-      // 3. Clear current audio RMS level and handle recognition/processing state
+      // 2. Clear current audio RMS level and abort any active recognition
       if (this.isMuted) {
         this.currentRMS = 0;
         this.userSpeechActive = false;
@@ -995,32 +888,16 @@
           clearTimeout(this.interimDebounceTimer);
           this.interimDebounceTimer = null;
         }
-        if (this._sttRestartTimer) {
-          clearTimeout(this._sttRestartTimer);
-          this._sttRestartTimer = null;
-        }
         if (this.fallbackSpeechRecognition) {
           try {
             this.fallbackSpeechRecognition.abort();
           } catch (e) {}
-          this._isSttRunning = false;
         }
-        this._setState(VoiceState.IDLE, { message: 'Microphone Muted', force: true });
       } else {
-        // Unmuting:
-        // Ensure AudioContext is active and not suspended
-        if (this.audioContext && this.audioContext.state === 'suspended') {
-          this.audioContext.resume().catch(e => console.warn('[VoiceAssistant] AudioContext resume failed on unmute:', e));
-        }
-
-        // Return immediately to LISTENING state so onaudioprocess and STT resume receiving audio
-        if (!this.isPlayingQueue && !this.isFallbackPlaying && this.state !== VoiceState.AI_SPEAKING) {
-          this._setState(VoiceState.LISTENING, { message: 'Listening... Speak now', force: true });
-        }
-
-        if (!this.isLiveApiMode) {
-          // Re-initialize fallback SpeechRecognition cleanly so any previous aborted state is cleared
-          this._initFallbackSpeechRecognition();
+        if (!this.isLiveApiMode && this.fallbackSpeechRecognition) {
+          try {
+            this.fallbackSpeechRecognition.start();
+          } catch (e) {}
         }
       }
     }
@@ -1030,12 +907,6 @@
       console.log('[VoiceAssistant] Language configured to:', this.selectedLang);
       if (this.fallbackSpeechRecognition) {
         this.fallbackSpeechRecognition.lang = this.selectedLang;
-      }
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({
-          type: 'live.language_change',
-          language: this.selectedLang
-        }));
       }
     }
 
@@ -1237,30 +1108,77 @@
         console.log('[VoiceAssistant STT] Speech ended.');
       };
 
+      this._sttNetworkErrorCount = 0;
+      this._sttRetryTimer = null;
+
       this.fallbackSpeechRecognition.onerror = (e) => {
-        if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        if (e.error !== 'no-speech' && e.error !== 'aborted' && e.error !== 'network') {
           console.warn('[VoiceAssistant Fallback STT Error]:', e.error);
         }
         if (this.state === VoiceState.USER_SPEAKING && !this.isMuted) {
           this._setState(VoiceState.LISTENING);
         }
-        // Auto-recover immediately on silence timeout ('no-speech') or network glitch
-        if (e.error === 'no-speech' || e.error === 'network') {
-          this._safeRestartSpeechRecognition(100);
+        
+        // Handle network error specifically: Google STT service was unreachable or blocked
+        if (e.error === 'network') {
+          this._sttNetworkErrorCount = (this._sttNetworkErrorCount || 0) + 1;
+          
+          // Log only once every 5 failures to keep console clean
+          if (this._sttNetworkErrorCount === 1) {
+            console.warn('[VoiceAssistant STT] Browser speech recognition service unavailable (network error). Retrying with backoff or use input box.');
+          }
+
+          // If repeated network errors occur (>3 times), use larger backoff (5s) instead of tight 300ms loop
+          const backoffDelay = this._sttNetworkErrorCount > 3 ? 5000 : 1500;
+          if (this.state !== VoiceState.IDLE && !this.isMuted && this.state !== VoiceState.AI_SPEAKING && !this.isFallbackPlaying) {
+            if (this._sttRetryTimer) clearTimeout(this._sttRetryTimer);
+            this._sttRetryTimer = setTimeout(() => {
+              if (this.state !== VoiceState.IDLE && !this.isMuted && this.state !== VoiceState.AI_SPEAKING && !this.isFallbackPlaying && !this._isSttRunning) {
+                try { this.fallbackSpeechRecognition.start(); } catch (err) {}
+              }
+            }, backoffDelay);
+          }
+          return;
+        }
+
+        // Auto-recover on 'no-speech'
+        if (e.error === 'no-speech') {
+          this._sttNetworkErrorCount = 0;
+          if (this.state !== VoiceState.IDLE && !this.isMuted && this.state !== VoiceState.AI_SPEAKING && !this.isFallbackPlaying) {
+            if (this._sttRetryTimer) clearTimeout(this._sttRetryTimer);
+            this._sttRetryTimer = setTimeout(() => {
+              try { this.fallbackSpeechRecognition.start(); } catch (err) {}
+            }, 500);
+          }
         }
       };
 
       this.fallbackSpeechRecognition.onend = () => {
         this._isSttRunning = false;
-        // Keep listening continuously even after 30s - 2min silence periods
-        if (this.state !== VoiceState.IDLE && !this.isMuted && this.state !== VoiceState.AI_SPEAKING && this.state !== VoiceState.THINKING && !this.isFallbackPlaying) {
-          this._safeRestartSpeechRecognition(100);
+        if (this.state !== VoiceState.IDLE && !this.isMuted) {
+          if (this.state !== VoiceState.AI_SPEAKING && this.state !== VoiceState.THINKING && !this.isFallbackPlaying) {
+            // Avoid immediately restarting if we just hit a network error and have a pending backoff
+            if (this._sttRetryTimer) return;
+            const restartDelay = (this._sttNetworkErrorCount && this._sttNetworkErrorCount > 0) ? 2000 : 400;
+            this._sttRetryTimer = setTimeout(() => {
+              this._sttRetryTimer = null;
+              if (this.state !== VoiceState.IDLE && !this.isMuted && this.state !== VoiceState.AI_SPEAKING && this.state !== VoiceState.THINKING && !this.isFallbackPlaying && !this._isSttRunning) {
+                try {
+                  this.fallbackSpeechRecognition.start();
+                } catch (e) {}
+              }
+            }, restartDelay);
+          }
         }
       };
 
       // Only start STT if assistant is not currently speaking TTS audio
       if (!this.isMuted && this.state !== VoiceState.AI_SPEAKING && this.state !== VoiceState.THINKING && !this.isFallbackPlaying) {
-        this._safeRestartSpeechRecognition(200);
+        setTimeout(() => {
+          try {
+            this.fallbackSpeechRecognition.start();
+          } catch (e) {}
+        }, 200);
       }
     }
 
@@ -1386,8 +1304,9 @@
         const ttsLang = (isBengaliText || targetLang.startsWith('bn')) ? 'bn-IN' : 'hi-IN';
         console.log(`[VoiceAssistant TTS] Device has no native ${ttsLang} voice. Streaming via backend proxy.`);
         try {
+          const targetRate = utterance.rate || 0.95;
           const encoded = encodeURIComponent(text.substring(0, 300));
-          const speedArg = targetRate ? `&speed=${targetRate}` : '';
+          const speedArg = `&speed=${targetRate}`;
           const audioUrl = `/api/tts?lang=${ttsLang}&text=${encoded}${speedArg}`;
           this._initAudioOutput();
           const audio = new Audio(audioUrl);
@@ -1423,8 +1342,13 @@
           this.currentAudioElement = audio;
           const playPromise = audio.play();
           if (playPromise !== undefined) {
-            playPromise.catch(() => {
-              this._playUtteranceFallback(utterance);
+            playPromise.catch((playErr) => {
+              console.warn('[Audio Play Autoplay Blocked or Failed]:', playErr);
+              if (!audioEnded) {
+                audioEnded = true;
+                this.currentAudioElement = null;
+                this._playUtteranceFallback(utterance);
+              }
             });
           }
           return;

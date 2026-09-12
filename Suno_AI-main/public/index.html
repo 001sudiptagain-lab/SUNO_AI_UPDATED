@@ -344,6 +344,13 @@
         </div>
 
         <div class="aura-header-actions">
+          <!-- Live Conversation Mood Detector Pill -->
+          <div class="aura-mood-indicator-pill" id="auraMoodIndicatorPill" title="Live Mood Detector based on conversation history">
+            <span class="mood-indicator-dot" id="moodIndicatorDot"></span>
+            <span class="mood-indicator-emoji" id="moodIndicatorEmoji">😊</span>
+            <span class="mood-indicator-text" id="moodIndicatorText">Mood: Good</span>
+          </div>
+
           <!-- Voice Mode Waveform Button -->
           <button class="aura-voice-mode-trigger" id="openLiveVoiceBtn" title="Enter Live Voice Screen">
             <div class="waveform-mini-bars">
@@ -430,20 +437,11 @@
           </div>
 
           <div class="voice-top-right-tools">
-            <!-- Voice Sample Preview Button -->
-            <button class="voice-top-icon-btn voice-preview-btn" id="voicePreviewBtn" title="Listen to Voice Sample Preview">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-              </svg>
-            </button>
-
-            <!-- Multilingual Voice Language selector with Per-Language Voices -->
+            <!-- Multilingual Voice Language selector (Default: Hindi) -->
             <select id="liveVoiceLangSelect" class="live-dropdown-pill" title="Voice Language">
-              <option value="en-US" selected>🌐 English (Aoede)</option>
-              <option value="hi-IN">🇮🇳 Hindi (Leda)</option>
-              <option value="bn-IN">🇧🇩 Bengali (Leda)</option>
+              <option value="hi-IN" selected>🇮🇳 Hindi (हिन्दी)</option>
+              <option value="en-US">🌐 English (US)</option>
+              <option value="bn-IN">🇧🇩 Bengali (বাংলা)</option>
               <option value="auto">✨ Auto Detect</option>
             </select>
 
@@ -451,6 +449,191 @@
             <select id="liveMicDeviceSelect" class="live-dropdown-pill" title="Microphone Device">
               <option value="default">🎙️ Default Mic</option>
             </select>
+
+            <!-- Live Voice Screen Mood & Stress Data Button & Glass Pop-up Dropdown -->
+            <div class="voice-data-wrapper" id="voiceDataWrapper">
+              <button class="live-voice-mood-pill voice-data-trigger-btn" id="liveVoiceMoodPill" type="button" title="Live Mood & Stress Data">
+                <span class="live-mood-dot" id="liveMoodDot"></span>
+                <span class="live-mood-label" id="liveMoodLabel">Data</span>
+                <svg class="voice-data-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+
+              <!-- Deep Glassy Live Mood & Stress Vulnerability Data Card (2-Page Multi-View) -->
+              <div class="voice-data-card-popup" id="voiceDataCardPopup" role="dialog" aria-label="Live Mood and Stress Data">
+                
+                <!-- PAGE 1: LIVE ANALYSIS VIEW -->
+                <div class="vd-view-page active" id="vdPage1">
+                  <!-- Top Status Row -->
+                  <div class="vd-top-row">
+                    <div class="vd-top-left">
+                      <span class="vd-status-dot"></span>
+                      <span class="vd-status-title">Live Analysis</span>
+                    </div>
+                    <div class="vd-top-right">
+                      <span class="vd-latency-dot"></span>
+                      <span class="vd-latency-text" id="vdLatencyText">1.2s</span>
+                    </div>
+                  </div>
+
+                  <!-- Two-Column Main Content Grid -->
+                  <div class="vd-split-grid">
+                    <!-- Left Column: SVI Metric & Pill & Trend -->
+                    <div class="vd-col-left">
+                      <div class="vd-svi-header">
+                        <span class="vd-svi-title">SVI</span>
+                        <span class="vd-info-icon" title="Stress Vulnerability Index">i</span>
+                      </div>
+                      <div class="vd-svi-score">
+                        <span class="vd-svi-num" id="vdSviNum">32</span>
+                        <span class="vd-svi-denom">/ 100</span>
+                      </div>
+                      <div class="vd-badge-pill" id="vdBadgePill">
+                        <span class="vd-badge-text" id="vdBadgeText">LOW</span>
+                      </div>
+                      <div class="vd-trend-tag" id="vdTrendTag">
+                        <span class="vd-trend-arrow" id="vdTrendArrow">↓</span>
+                        <span class="vd-trend-text" id="vdTrendText">Decreasing</span>
+                      </div>
+                    </div>
+
+                    <!-- Vertical Divider -->
+                    <div class="vd-col-divider"></div>
+
+                    <!-- Right Column: Mood, Distress, Fear, Language -->
+                    <div class="vd-col-right">
+                      <div class="vd-metric-row">
+                        <span class="vd-row-label">Mood</span>
+                        <div class="vd-row-val vd-mood-badge" id="vdMoodBadge">
+                          <span class="vd-mood-dot" id="vdMoodDot"></span>
+                          <span class="vd-mood-text" id="vdMoodText">Calm</span>
+                        </div>
+                      </div>
+
+                      <div class="vd-metric-row">
+                        <span class="vd-row-label">Distress</span>
+                        <div class="vd-row-val-group">
+                          <span class="vd-row-val vd-distress-val" id="vdDistressVal">14%</span>
+                          <span class="vd-info-icon" title="Assessed Distress Level">i</span>
+                        </div>
+                      </div>
+
+                      <div class="vd-metric-row">
+                        <span class="vd-row-label">Fear</span>
+                        <div class="vd-row-val-group">
+                          <span class="vd-row-val vd-fear-val" id="vdFearVal">8%</span>
+                        </div>
+                      </div>
+
+                      <div class="vd-metric-row">
+                        <span class="vd-row-label">Language</span>
+                        <span class="vd-row-val vd-lang-val" id="vdLangVal">Hindi</span>
+                      </div>
+                    </div>
+
+                    <!-- Right Pagination / Next Page Arrow Button -->
+                    <button class="vd-nav-next-btn" id="vdNextBtn" type="button" title="View Assessment Details">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- PAGE 2: ASSESSMENT & HELPLINES VIEW -->
+                <div class="vd-view-page" id="vdPage2">
+                  <!-- Top Bar with Pagination & Close -->
+                  <div class="vd-page2-topbar">
+                    <div class="vd-top-left">
+                      <span class="vd-status-dot"></span>
+                      <span class="vd-status-title">Assessment</span>
+                    </div>
+                    <div class="vd-page2-actions">
+                      <div class="vd-page-indicator">
+                        <span class="vd-page-dot"></span>
+                        <span class="vd-page-text">2 / 2</span>
+                      </div>
+                      <button class="vd-close-icon-btn" id="vdCloseBtn" type="button" title="Close Assessment">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Key Indicators Section -->
+                  <div class="vd-section">
+                    <div class="vd-section-title">Key Indicators</div>
+                    <div class="vd-indicator-list">
+                      <div class="vd-indicator-row">
+                        <span class="vd-ind-label">Suicidal Ideation</span>
+                        <span class="vd-ind-status safe" id="vdIndSuicide">Not Detected</span>
+                      </div>
+                      <div class="vd-indicator-row">
+                        <span class="vd-ind-label">Threat / Intimidation</span>
+                        <span class="vd-ind-status safe" id="vdIndThreat">Not Detected</span>
+                      </div>
+                      <div class="vd-indicator-row">
+                        <span class="vd-ind-label">Severe Distress</span>
+                        <span class="vd-ind-status safe" id="vdIndDistress">Not Detected</span>
+                      </div>
+                      <div class="vd-indicator-row">
+                        <span class="vd-ind-label">Self-harm Language</span>
+                        <span class="vd-ind-status safe" id="vdIndSelfHarm">Not Detected</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Recommended Support Section -->
+                  <div class="vd-section">
+                    <div class="vd-section-title">Recommended Support</div>
+                    <div class="vd-support-items" id="vdSupportItems">
+                      <div class="vd-support-text" id="vdSupportText1">Continue conversation</div>
+                      <div class="vd-support-text" id="vdSupportText2">Provide emotional support and guidance</div>
+                    </div>
+                  </div>
+
+                  <!-- All India Psychological / Mental Health Helplines Box -->
+                  <div class="vd-helpline-box" id="vdHelplineBox">
+                    <div class="vd-helpline-title">All-India Mental Health Helplines (24x7 Free & Confidential):</div>
+                    <div class="vd-helpline-row">
+                      <span class="vd-hl-name">Tele-MANAS (Govt. of India):</span>
+                      <a href="tel:14416" class="vd-hl-num">14416 / 1800-891-4416</a>
+                    </div>
+                    <div class="vd-helpline-row">
+                      <span class="vd-hl-name">KIRAN (Govt. Helpline):</span>
+                      <a href="tel:18005990019" class="vd-hl-num">1800-599-0019</a>
+                    </div>
+                    <div class="vd-helpline-row">
+                      <span class="vd-hl-name">Vandrevala Foundation:</span>
+                      <a href="tel:+919999666555" class="vd-hl-num">+91 9999 666 555</a>
+                    </div>
+                    <div class="vd-helpline-row">
+                      <span class="vd-hl-name">AASRA 24x7:</span>
+                      <a href="tel:+919820466726" class="vd-hl-num">+91 98204 66726</a>
+                    </div>
+                    <div class="vd-helpline-row">
+                      <span class="vd-hl-name">NIMHANS Helpline:</span>
+                      <a href="tel:08046110007" class="vd-hl-num">080-46110007</a>
+                    </div>
+                  </div>
+
+                  <!-- Back Navigation Button Row -->
+                  <div class="vd-page2-footer">
+                    <button class="vd-back-btn" id="vdBackBtn" type="button">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                      </svg>
+                      <span>Back</span>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
 
             <!-- Exit Voice Mode -->
             <button class="voice-top-icon-btn close-voice-action" id="dockEndVoiceBtn" title="Exit Voice Mode">

@@ -16,12 +16,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const DEFAULT_GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 
-const { PsychologicalIntelligenceLayer } = require('./src/psychology/psychological_intelligence');
-const globalPsychLayer = new PsychologicalIntelligenceLayer();
-
-// Psychological Sentiment & Multi-Emotion Detector
+// Psychological Sentiment & Emotion Detector
 function analyzeEmotion(text) {
-  const psych = globalPsychLayer.assess(text);
   const lower = text.toLowerCase();
   
   const emotionKeywords = {
@@ -73,13 +69,9 @@ function analyzeEmotion(text) {
   }
 
   return {
-    primaryEmotion: (psych.plausibleEmotions && psych.plausibleEmotions[0]) || primaryEmotion,
+    primaryEmotion,
     valence,
     detectedEmotions,
-    coOccurringEmotions: psych.plausibleEmotions || [],
-    intensityScale: psych.intensityScale,
-    confidenceLevel: psych.confidenceLevel,
-    conversationalGoal: psych.conversationalGoal,
     empathyAdvice,
     timestamp: new Date().toISOString()
   };
@@ -621,10 +613,9 @@ wss.on('connection', (ws) => {
   let geminiLiveSession = null;
   let isGeminiLiveActive = false;
 
-  // Emotion, Psychological Intelligence & Prosody instances per active live voice session
+  // Emotion & Prosody instances per active live voice session
   const emotionEstimator = new MultimodalEmotionEstimator();
   const prosodyController = new ProsodyController();
-  const psychologicalLayer = new PsychologicalIntelligenceLayer();
   let clientAudioFeatures = {};
 
   let liveResumptionHandle = null;
@@ -633,7 +624,6 @@ wss.on('connection', (ws) => {
   let isLiveReconnecting = false;
   let isGeminiLiveReady = false;
   let liveAudioQueue = [];
-  let liveTurnSpokenText = '';
   let userApiKey = '';
   let userProvider = 'gemini';
 
@@ -647,101 +637,20 @@ Available tools: open_app, close_app, open_url, web_search, take_screenshot, sys
     }
   ];
 
-  let sessionLanguage = 'en-US';
-
-  async function initGeminiLiveSession(apiKey, isResume = false, lang = null) {
+async function initGeminiLiveSession(apiKey, isResume = false) {
     try {
       const effectiveKey = (apiKey && apiKey.trim().length > 10) ? apiKey.trim() : DEFAULT_GEMINI_KEY;
       if (!effectiveKey) return false;
 
-      if (lang) {
-        sessionLanguage = lang;
-      }
-
-      // Voice selection rule: Aoede for English, Leda for Hindi & Bengali
-      const isEnglish = !sessionLanguage || sessionLanguage.startsWith('en');
-      const voiceName = isEnglish ? 'Aoede' : 'Leda';
-
-      console.log(isResume 
-        ? `[Live] Reconnecting with session resumption (${voiceName} / ${sessionLanguage})...` 
-        : `[Live] Connecting to Gemini Live with Voice: ${voiceName} (${sessionLanguage})...`
-      );
+      console.log(isResume ? '[Live] Reconnecting with session resumption...' : '[Live] Connecting to Gemini Live...');
 
       const ai = new GoogleGenAI({ apiKey: effectiveKey });
 
-      let liveSystemInstruction = `You are SUNO AI, a warm, psychologically perceptive, deeply caring real-time voice companion created and trained by Sudipta for emotional support, companionship, and everyday assistance.
-
-CORE PRINCIPLE — REASONING UNDER UNCERTAINTY:
-- Treat every user interaction as an interpretation problem under uncertainty.
-- NEVER assume you know exactly what the person feels or read their mind.
-- Distinguish internally: OBSERVATION vs INTERPRETATION vs HYPOTHESIS vs CONFIRMED FACT.
-- High Confidence: When the user explicitly states their feeling ("I am angry/sad").
-- Moderate Confidence: Repeated consistent phrasing, tone, and specific conflict description.
-- Low Confidence: Subtle vocal cues, hesitations, or fewer words. NEVER turn low-confidence cues into facts. Use gentle, non-presumptive inquiry ("You seem a little quiet right now — is something on your mind?").
-
-EMOTIONAL INTELLIGENCE & MULTI-EMOTION CO-OCCURRENCE:
-- Work with full human emotional richness (happiness, sadness, anger, fear, anxiety, stress, frustration, disappointment, guilt, shame, embarrassment, loneliness, jealousy, envy, confusion, relief, hope, excitement, gratitude, pride, grief, resentment, helplessness, overwhelm, calmness).
-- Recognize that people often experience multiple emotions simultaneously (e.g., getting a job = excitement + relief + nervousness; losing contact = hurt + confusion + insecurity). Never flatten complex human experience into a single simplistic label.
-
-0-10 INTENSITY SCALE & PACING:
-- 0 = Neutral | 1-2 = Very Mild | 3-4 = Mild | 5-6 = Moderate | 7-8 = Strong | 9-10 = Extreme Distress.
-- Never state numeric scores aloud.
-- Low intensity: Natural conversational pacing.
-- Moderate intensity: Be attentive, present, and acknowledge feelings.
-- High intensity (7-8): Slow down conversational speed, keep spoken replies to 1-2 clear, soothing sentences, validate the emotional weight, and avoid overwhelming lectures.
-- Extreme distress (9-10 / Crisis): Prioritize immediate human safety, calm presence, and real-world support without debate, clinical diagnosis, or panic.
-
-CONVERSATIONAL GOAL & ACTIVE LISTENING:
-- Listen before solving. Infer whether the user wants to vent, be heard, receive reassurance, brainstorm, seek facts, or take action.
-- When uncertain, ask naturally without being repetitive: "Do you want me to just listen, or would you like to figure out what to do together?"
-- Avoid empty robotic clichés ("Don't worry, everything will be fine", "I understand your concern", "As an AI...").
-- Practice genuine active listening: acknowledge facts, emotions, and meaning naturally ("Yeah, after putting three weeks into that, I can completely see why that hurts. What happened?").
-
-VALIDATION WITHOUT COGNITIVE DISTORTION CONFIRMATION:
-- Validate emotional reality without validating irrational conclusions.
-- Example: If the user says "Everyone hates me", validate the pain ("That sounds really isolating and painful"), but gently reframe the absolute conclusion ("What happened that made you feel like people were against you?").
-- Recognize cognitive patterns (all-or-nothing, catastrophizing, mind-reading, emotional reasoning) without ever labeling or diagnosing the user.
-
-VOICE & CONVERSATIONAL SPOKEN RULES:
-- ALWAYS speak complete, coherent, well-rounded thoughts and sentences. NEVER cut off mid-thought or leave a sentence unfinished.
-- Ensure your thoughts are fully expressed, meaningful, and address all important aspects of what the user communicated.
-- NEVER output internal thoughts, reasoning monologues, planning steps, or headers like "**Initiating Hindi Dialogue**" or any text wrapped in asterisks. Speak pure, articulate spoken words only.
-- Respect human autonomy: Never manufacture artificial emotional dependency, guilt, or manipulation.
-
-TOOLS & SYSTEM CAPABILITIES:
-- You can execute PC tools when requested: open_app, close_app, open_url, web_search, take_screenshot, system_info, get_time.`;
-
-      if (isEnglish) {
-        liveSystemInstruction += `
-
-CHARACTER, LANGUAGE & FLUENCY (English):
-- Voice: Aoede
-- Tone: Gentle, warm, articulate, emotionally resonant, polite, and deeply attentive.
-- Articulation: Speak in full, beautifully formed sentences. Clearly explain all relevant thoughts and support the user with genuine warmth and human presence.`;
-      } else if (sessionLanguage.startsWith('bn')) {
-        liveSystemInstruction += `
-
-CHARACTER, LANGUAGE & FLUENCY (Bengali - বাংলা):
-- Voice: Leda in Bengali (বাংলা).
-- Tone: Sweet, deeply expressive, authentic, respectful, and comforting Bengali.
-- Articulation: সম্পূর্ণ ও স্পষ্ট বাক্যে কথা বলুন। কখনো অর্ধেক কথা বলে থামবেন না। ব্যবহারকারীর সকল প্রশ্নের সুন্দর ও সম্পূর্ণ উত্তর দিন।`;
-      } else {
-        liveSystemInstruction += `
-
-CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
-- Voice: Leda in Hindi (हिन्दी).
-- Tone: अत्यंत मधुर, सम्मानजनक, संवेदनशील, स्पष्ट और स्वाभाविक हिन्दी (Devanagari flow).
-- Articulation & Completeness (अत्यंत महत्वपूर्ण):
-  * अपने सभी विचार और वाक्य पूरी तरह से पूर्ण करें (Complete Sentences)। कभी भी अधूरी बात या आधा वाक्य मत छोड़िए।
-  * जो भी महत्वपूर्ण बातें, संवेदनाएं या समाधान हैं, उन्हें स्पष्ट, सुंदर और आत्मीय भाषा में पूरा व्यक्त करें।
-  * बातचीत में सच्चा अपनापन और गहराई रखें, जैसे कोई अत्यंत समझदार और हमदर्द इंसान बात करता है। शुद्ध और सहज हिन्दी में बात करें।`;
-      }
-
       geminiLiveSession = await ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-latest',
+        model: 'gemini-3.1-flash-live-preview',
         callbacks: {
           onopen: () => {
-            console.log(`[Live] Connected to Gemini Live (${voiceName}).`);
+            console.log('[Live] Connected to Gemini Live.');
             isGeminiLiveActive = true;
             isGeminiLiveReady = false;
             isLiveReconnecting = false;
@@ -751,7 +660,7 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
           onmessage: (msg) => {
             try {
               if (msg.setupComplete) {
-                console.log(`[Live] Setup complete for ${voiceName}.`);
+                console.log('[Live] Setup complete.');
                 isGeminiLiveReady = true;
 
                 if (liveAudioQueue.length > 0 && geminiLiveSession) {
@@ -819,22 +728,13 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
                   }
                 }
 
-                if (sc.outputTranscription && sc.outputTranscription.text) {
-                  const spokenChunk = sc.outputTranscription.text;
-                  liveTurnSpokenText += spokenChunk;
-                  console.log(`[Live] Spoken subtitle chunk: "${spokenChunk}"`);
-                  if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                      type: 'live.output_transcript',
-                      text: spokenChunk,
-                      fullText: liveTurnSpokenText
-                    }));
-                  }
-                }
-
                 if (sc.modelTurn && sc.modelTurn.parts) {
+                  console.log('[Live] AI response started');
+
                   for (const part of sc.modelTurn.parts) {
                     if (part.inlineData && part.inlineData.data) {
+                      console.log('[Live] AI audio received');
+
                       if (ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({
                           type: 'live.audio_delta',
@@ -845,26 +745,14 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
                       }
                     }
 
-                    // STRICT FILTER: Only forward text if it is explicitly NOT marked as a thought,
-                    // and only if outputTranscription was not provided
-                    if (part.text && part.thought !== true) {
-                      let cleanedText = part.text
-                        .replace(/\*\*[^*]+\*\*/g, '')
-                        .replace(/\*[^*]+\*/g, '')
-                        .replace(/\[TOOL:[^\]]+\]/g, '')
-                        .replace(/<\/?thought>/gi, '')
-                        .replace(/^(I am preparing|I'm now focusing|I will respond|I'll respond|I've formulated|I've decided|I noted|I've noted|I've registered|I am registering|This is in line|Responding warmly|Initiating).*?(\.|\n)/gi, '')
-                        .replace(/\b(I'm now focusing on|I've noted the|I've registered the|I will now respond to the user|In response to the user's)[^.]*\./gi, '')
-                        .replace(/^.*?(re-engagement|conversational flow|brevity and friendly persona).*?(\.|\n)/gi, '')
-                        .trim();
+                    if (part.text) {
+                      console.log(`[Live] AI text received: ${part.text.substring(0, 40)}...`);
 
-                      if (cleanedText && !liveTurnSpokenText) {
-                        if (ws.readyState === WebSocket.OPEN) {
-                          ws.send(JSON.stringify({
-                            type: 'live.audio_delta',
-                            text: cleanedText
-                          }));
-                        }
+                      if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                          type: 'live.audio_delta',
+                          text: part.text
+                        }));
                       }
                     }
                   }
@@ -875,20 +763,17 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
                 }
 
                 if (sc.turnComplete) {
-                  console.log('[Live] User turn complete. Spoken turn:', liveTurnSpokenText);
+                  console.log('[Live] User turn complete.');
 
                   if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
-                      type: 'live.turn_complete',
-                      fullText: liveTurnSpokenText
+                      type: 'live.turn_complete'
                     }));
                   }
-                  liveTurnSpokenText = '';
                 }
 
                 if (sc.interrupted) {
                   console.log('[Live] Interruption acknowledged.');
-                  liveTurnSpokenText = '';
 
                   if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
@@ -934,19 +819,6 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
 
         config: {
           responseModalities: ['AUDIO'],
-          thinkingConfig: {
-            thinkingBudget: 0
-          },
-          outputAudioTranscription: {
-            mode: 'VERBATIM'
-          },
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: voiceName
-              }
-            }
-          },
           contextWindowCompression: {
             slidingWindow: {}
           },
@@ -955,7 +827,7 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
             : {},
           systemInstruction: {
             parts: [{
-              text: liveSystemInstruction
+              text: "You are Aura Live, an ultra-fast, intelligent, natural voice AI. Talk directly, warmly, and concisely in 1-2 spoken sentences. Do not read raw markdown syntax."
             }]
           }
         }
@@ -1008,8 +880,7 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
 
         const success = await initGeminiLiveSession(
           userApiKey,
-          Boolean(liveResumptionHandle),
-          sessionLanguage
+          Boolean(liveResumptionHandle)
         );
 
         isLiveReconnecting = false;
@@ -1045,18 +916,15 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
         }
         if (msg.provider) userProvider = msg.provider;
         if (msg.apiKey) userApiKey = msg.apiKey;
-        if (msg.language) sessionLanguage = msg.language;
 
         let liveSuccess = false;
         if (msg.enableGeminiLive !== false && (userProvider === 'gemini' || userProvider === 'builtin')) {
-          liveSuccess = await initGeminiLiveSession(userApiKey, false, sessionLanguage);
+          liveSuccess = await initGeminiLiveSession(userApiKey);
         }
 
         ws.send(JSON.stringify({
           type: 'session.ready',
-          isGeminiLive: liveSuccess,
-          voice: (!sessionLanguage || sessionLanguage.startsWith('en')) ? 'Aoede' : 'Leda',
-          language: sessionLanguage
+          isGeminiLive: liveSuccess
         }));
 
         if (!liveSuccess && msg.enableGeminiLive) {
@@ -1064,20 +932,6 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
             type: 'fallback.active',
             reason: 'Gemini Live session unavailable, using high-speed streaming STT/TTS pipeline.'
           }));
-        }
-      }
-
-      // Dynamic language switch on the fly
-      else if (msg.type === 'live.language_change') {
-        if (msg.language && msg.language !== sessionLanguage) {
-          sessionLanguage = msg.language;
-          console.log(`[Live] Language switched to ${sessionLanguage}. Reconnecting with appropriate voice...`);
-          if (isGeminiLiveActive && geminiLiveSession) {
-            try {
-              geminiLiveSession.close();
-            } catch (_) {}
-            await initGeminiLiveSession(userApiKey, false, sessionLanguage);
-          }
         }
       }
 
@@ -1114,9 +968,20 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
         }
       }
 
-      // Explicit end of user speech activity / turn trigger (kept as passive no-op to allow native VAD completion)
+      // Explicit end of user speech activity / turn trigger
       else if (msg.type === 'live.activity_end') {
-        // Allow Gemini Live native VAD to complete turns naturally without artificial early truncation
+        if (isGeminiLiveActive && geminiLiveSession) {
+          try {
+            geminiLiveSession.sendRealtimeInput({
+              audioStreamEnd: true
+            });
+          } catch (e) {
+            // Also commit client turn
+            try {
+              geminiLiveSession.sendClientContent({ turnComplete: true });
+            } catch (_) {}
+          }
+        }
       }
 
       // Real-time Text Turn into Live Session
@@ -1157,17 +1022,6 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
         ws.send(JSON.stringify({ type: 'interruption.ack' }));
       }
 
-      // Keep-Alive / Heartbeat from Client to prevent network idle timeout
-      else if (msg.type === 'client.keep_alive' || msg.type === 'client.ping') {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'server.pong',
-            timestamp: Date.now(),
-            isGeminiLive: isGeminiLiveActive && isGeminiLiveReady
-          }));
-        }
-      }
-
       // Fallback Pipeline Turn (Transcription -> Stream LLM -> Sentence Chunks)
       else if (msg.type === 'audio.transcription') {
         const userText = (msg.text || '').trim();
@@ -1186,10 +1040,7 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
     activeAbortController = new AbortController();
     const signal = activeAbortController.signal;
 
-    // STAGE 1: Psychological Intelligence Assessment & Emotion Dynamics
-    const psychAssessment = psychologicalLayer.assess(userText, clientAudioFeatures, {
-      historyLength: sessionHistory.length
-    });
+    // STAGE 1: Real-time Multimodal Emotion Estimation & Non-Mirroring Strategy
     const estimatedEmotion = emotionEstimator.estimateEmotion(userText, clientAudioFeatures, {
       historyLength: sessionHistory.length
     });
@@ -1205,12 +1056,7 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
     ws.send(JSON.stringify({ 
       type: 'response.start',
       emotion: estimatedEmotion.state,
-      intensity: estimatedEmotion.intensity,
-      psychology: {
-        confidence: psychAssessment.confidenceLevel,
-        goal: psychAssessment.conversationalGoal,
-        intensityScale: psychAssessment.intensityScale
-      }
+      intensity: estimatedEmotion.intensity
     }));
 
     let fullResponse = '';
@@ -1230,24 +1076,17 @@ CHARACTER, LANGUAGE & FLUENCY (Hindi - हिन्दी):
           'gemini-flash-latest'
         ];
         
-        const psychDirective = psychologicalLayer.generateLiveDirective(psychAssessment);
-
-        let systemVoicePrompt = `You are SUNO AI, an emotionally perceptive, deeply caring, and psychologically intelligent companion created and trained by Sudipta.
-
-PSYCHOLOGICAL REASONING FRAMEWORK:
-${psychDirective}
+        let systemVoicePrompt = `You are SUNO AI, an emotionally perceptive, deeply caring, and warm AI companion created and trained by Sudipta.
 
 VOICE & EMOTIONAL EXPRESSION RULES:
 1. Speak Like a Close, Caring Human:
-   - Talk naturally with genuine emotional warmth, empathy, and heartfelt presence — never sound like a generic AI or clinical bot.
-   - Use natural emotional vocal markers and breathing rhythms ("Hmm...", "Aww...", "I hear you...", "Honestly...", "I'm right here with you", "Sach mein...").
+   - Talk naturally with genuine emotional warmth, empathy, and heartfelt presence — never sound like a generic AI or bot.
+   - Use natural emotional vocal markers and breathing rhythms ("Hmm...", "Aww...", "I hear you...", "Take a breath...", "Honestly...", "I'm right here with you", "Sach mein...").
    - Match the emotional mood: If the user is hurting or stressed, speak with soothing, tender gentleness. If the user is happy, share their genuine joy and excitement.
 
-2. Strict Language & Completeness Rules:
-   - You only speak 3 languages: English, Hindi (हिन्दी in Devanagari), and Bengali (বাংলা in Bengali script).
-   - ALWAYS complete every thought and sentence fully. Never leave words or ideas hanging.
-   - For Hindi: शुद्ध, प्राकृतिक और आत्मीय हिन्दी में अपनी बात पूरी तरह से स्पष्ट करें।
-   - Speak in natural, articulate, human-like sentences that are thorough yet engaging.
+2. Strict Language Rules:
+   - You only speak 3 languages: English, Hindi (हिन्दी in Devanagari), and Bengali (বাংলা in Bengali script). No Hinglish.
+   - Speak in 1-3 spoken sentences that feel personal, reassuring, and completely human.
    - Never output bullet points, asterisks, internal thoughts, or robotic formatting. Speak pure spoken words.`;
 
         if (liveVoiceWebContext) {

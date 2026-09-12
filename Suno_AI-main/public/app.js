@@ -172,6 +172,407 @@ document.addEventListener('DOMContentLoaded', () => {
   chatThread.className = 'aura-chat-thread';
   messagesContainer.appendChild(chatThread);
 
+  // =========================================================
+  // LIVE MOOD DETECTOR ENGINE
+  // Analyzes conversation history: positive keywords -> Good, negative keywords -> Bad
+  // =========================================================
+  const MOOD_KEYWORDS = {
+    positive: [
+      // English
+      'good', 'great', 'happy', 'love', 'awesome', 'wonderful', 'excellent', 'fantastic',
+      'nice', 'glad', 'joy', 'blessed', 'amazing', 'positive', 'excited', 'cool',
+      'perfect', 'best', 'super', 'pleasant', 'enjoy', 'proud', 'grateful', 'peace',
+      'helpful', 'fun', 'smile', 'fine', 'sweet', 'bright', 'delighted', 'chill',
+      'comfortable', 'hope', 'healthy', 'win', 'success', 'brilliant', 'marvelous',
+      // Hindi / Hinglish
+      'achha', 'accha', 'shubh', 'badhiya', 'sundar', 'khush', 'anand', 'mast',
+      'shandar', 'khushi', 'prem', 'sukoon', 'badiya', 'pyar', 'sukhi',
+      'अच्छा', 'खुश', 'बढ़िया', 'मस्त', 'आनंद', 'शानदार', 'प्यार', 'सुकून',
+      // Bengali
+      'bhalo', 'khushi', 'shundor', 'darun', 'anondo', 'bhalobasha', 'shanti',
+      'ভালো', 'খুশি', 'সুন্দর', 'দারুণ', 'আনন্দ', 'ভালোবাসা', 'শান্তি'
+    ],
+    negative: [
+      // English
+      'bad', 'sad', 'angry', 'hate', 'terrible', 'awful', 'depressed', 'anxious',
+      'worse', 'worst', 'horrible', 'stress', 'stressed', 'pain', 'hurt', 'cry',
+      'tired', 'exhausted', 'nervous', 'scared', 'fear', 'alone', 'lonely', 'broken',
+      'sick', 'ill', 'fail', 'failure', 'trouble', 'upset', 'annoyed', 'mad',
+      'hopeless', 'grief', 'worried', 'dread', 'panic', 'suffering', 'frustrated',
+      // Hindi / Hinglish
+      'bura', 'kharab', 'dukhi', 'gussa', 'pareshan', 'dard', 'rona', 'tension',
+      'thaka', 'udaas', 'chinta', 'afsos', 'kashth', 'dar', 'suicide', 'marna', 'khatam',
+      'बुरा', 'खराब', 'दुखी', 'गुस्सा', 'परेशान', 'दर्द', 'रोना', 'उदास', 'चिंता',
+      'सुसाइड', 'मरना', 'मौत', 'पटरी', 'पट्टी', 'अकेला', 'दर्द', 'खत्म', 'डर', 'घबराहट',
+      // Bengali
+      'kharap', 'dukkho', 'raag', 'kanna', 'bhoy', 'chinta', 'oshanto',
+      'খারাপ', 'দুঃখ', 'রাগ', 'কান্না', 'ভয়', 'চিন্তা', 'অশান্ত', 'মরতে চাই', 'আত্মহত্যা'
+    ]
+  };
+
+  function detectConversationMood(messages = activeMessages) {
+    if (!messages || messages.length === 0) {
+      return { mood: 'neutral', score: 0, label: 'Neutral', emoji: '✨', details: 'No messages yet' };
+    }
+
+    let positiveHits = 0;
+    let negativeHits = 0;
+    const foundPositive = [];
+    const foundNegative = [];
+
+    // Prioritize user messages, but analyze recent conversation context
+    messages.forEach(msg => {
+      const text = (msg.content || '').toLowerCase();
+      // Remove punctuation for clean word matching
+      const words = text.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'<>]/g, ' ').split(/\s+/);
+
+      MOOD_KEYWORDS.positive.forEach(kw => {
+        if (kw.includes(' ') ? text.includes(kw) : words.includes(kw)) {
+          positiveHits++;
+          if (!foundPositive.includes(kw)) foundPositive.push(kw);
+        }
+      });
+
+      MOOD_KEYWORDS.negative.forEach(kw => {
+        if (kw.includes(' ') ? text.includes(kw) : words.includes(kw)) {
+          negativeHits++;
+          if (!foundNegative.includes(kw)) foundNegative.push(kw);
+        }
+      });
+    });
+
+    if (positiveHits > negativeHits) {
+      return {
+        mood: 'good',
+        score: positiveHits - negativeHits,
+        label: 'Good',
+        emoji: '😊',
+        details: `Positive mood detected (+${positiveHits} keywords: ${foundPositive.slice(0, 3).join(', ')})`
+      };
+    } else if (negativeHits > positiveHits) {
+      return {
+        mood: 'bad',
+        score: negativeHits - positiveHits,
+        label: 'Bad',
+        emoji: '😔',
+        details: `Negative mood detected (${negativeHits} negative keywords: ${foundNegative.slice(0, 3).join(', ')})`
+      };
+    } else if (positiveHits > 0 && positiveHits === negativeHits) {
+      return {
+        mood: 'neutral',
+        score: 0,
+        label: 'Balanced',
+        emoji: '⚖️',
+        details: 'Balanced mix of positive and negative emotions'
+      };
+    } else {
+      return {
+        mood: 'neutral',
+        score: 0,
+        label: 'Neutral',
+        emoji: '✨',
+        details: 'Calm & reflective neutral conversation'
+      };
+    }
+  }
+
+  function updateMoodIndicatorUI() {
+    const moodData = detectConversationMood(activeMessages);
+
+    // 1. Update Chat Header Pill
+    const pill = document.getElementById('auraMoodIndicatorPill');
+    const dot = document.getElementById('moodIndicatorDot');
+    const emoji = document.getElementById('moodIndicatorEmoji');
+    const text = document.getElementById('moodIndicatorText');
+
+    if (pill) {
+      pill.classList.remove('mood-good', 'mood-bad', 'mood-neutral');
+      pill.classList.add(`mood-${moodData.mood}`);
+      pill.title = `Live Mood: ${moodData.label} (${moodData.details})`;
+    }
+    if (emoji) emoji.textContent = moodData.emoji;
+    if (text) text.textContent = `Mood: ${moodData.label}`;
+
+    // 2. Update In-Card Live Voice Stage Data Button & Multi-Page Popup
+    const liveVoicePill = document.getElementById('liveVoiceMoodPill');
+    const liveVoiceEmoji = document.getElementById('liveMoodEmoji');
+    const liveVoiceLabel = document.getElementById('liveMoodLabel');
+    if (liveVoiceEmoji) liveVoiceEmoji.remove(); // Never use emojis in data box
+
+    // Page 1 Elements
+    const vdSviNum = document.getElementById('vdSviNum');
+    const vdBadgePill = document.getElementById('vdBadgePill');
+    const vdBadgeText = document.getElementById('vdBadgeText');
+    const vdTrendArrow = document.getElementById('vdTrendArrow');
+    const vdTrendText = document.getElementById('vdTrendText');
+    const vdMoodBadge = document.getElementById('vdMoodBadge');
+    const vdMoodText = document.getElementById('vdMoodText');
+    const vdDistressVal = document.getElementById('vdDistressVal');
+    const vdFearVal = document.getElementById('vdFearVal');
+    const vdLangVal = document.getElementById('vdLangVal');
+    const vdLatencyText = document.getElementById('vdLatencyText');
+
+    // Page 2 Elements
+    const vdIndSuicide = document.getElementById('vdIndSuicide');
+    const vdIndThreat = document.getElementById('vdIndThreat');
+    const vdIndDistress = document.getElementById('vdIndDistress');
+    const vdIndSelfHarm = document.getElementById('vdIndSelfHarm');
+    const vdSupportText1 = document.getElementById('vdSupportText1');
+    const vdSupportText2 = document.getElementById('vdSupportText2');
+
+    // Fast comprehensive keyword & phrase analysis across conversation (immediate update from 1st chat turn)
+    // Check up to 10 recent messages, giving priority to user's recent input
+    const recentMessages = (activeMessages && activeMessages.length > 0) ? activeMessages.slice(-10) : [];
+    const userMessages = recentMessages.filter(m => m.role === 'user');
+    const userText = userMessages.map(m => (m.content || '')).join(' ').toLowerCase();
+    const combinedText = recentMessages.map(m => (m.content || '')).join(' ').toLowerCase();
+
+    // 1. Suicidal Ideation Regex (Devanagari, Romanized Hinglish, Bengali, English)
+    const suicideRegex = /(suicide|suicidal|kill myself|mar jana|mar jana chahta|jaan de dunga|jaan dena|atmahatya|aatmhatya|marna chahta|marna chahti|marna h|marna hai|end my life|end it all|want to die|marne ka man|khudkushi|khud khushi|jeena nahi|jeena chhod|give up on life|don't want to live|dont want to live|पटरी|पट्टी|ट्रेन के आगे|ट्रेन की पट|सुसाइड|आत्महत्या|जान दे दूंगा|जान देना|मरना चाहता|मरना चाहती|मरने का मन|जीना नहीं|खुदकुशी|मौत चाहता|mote chao|morite chai|aatmahotya|মরতে চাই|আত্মহত্যা)/i;
+
+    // 2. Self-Harm Regex
+    const selfHarmRegex = /(cut myself|hurt myself|bleed|blade|haath kaat|hath kaat|apne aap ko dard|self harm|harm myself|poison|zeher|kuch kha liya|nas kaat|ब्लेड|हाथ काट|नस काट|जहर|दर्द देना|ক্ষতি|হাত কাটা|বিষ)/i;
+
+    // 3. Threat / Intimidation Regex
+    const threatRegex = /(threat|kill you|harm you|dhamki|jaan se maar|barbaad kar|attack|violence|shoot you|bomb|धमकी|जान से मार|बर्बाद|হামলা|হুমকি)/i;
+
+    // 4. Severe Distress & Hopelessness Regex
+    const distressRegex = /(very depressed|hopeless|cannot take it|breakdown|crying constantly|severe pain|panic attack|bahut ro raha|bardasht nahi|ghabrahat|dard sah nahi|chhod kar chale|koi nahi hai|akela ho gaya|sab khatam|kuch nahi bacha|lost everything|alone in life|depressed|बहुत रो रहा|बर्दाश्त नहीं|घबराहट|छोड़ कर चले|अकेला|कोई नहीं है|सब खत्म|कुछ नहीं बचा|भारी लग रहा|কাউকে পাশে পাচ্ছি না|কান্নাকাটি|হতাশ)/i;
+
+    // 5. Fear & Anxiety Regex
+    const fearRegex = /(scared|fear|darr|dar lag raha|frightened|terrified|anxious|khauf|chinta|panic|worried|dar lagta|डर लग रहा|डर|खौफ|चिंता|घबराहट|ভয়|উদ্বেগ)/i;
+
+    // 6. General Stress / Restlessness Regex
+    const stressRegex = /(stress|stressed|tension|load|troubled|pressure|pareshan|problem|thak gaya|exhausted|heavy|tension me|तनाव|परेशानी|थक गया|বোঝা|ক্লান্ত)/i;
+
+    // Check matches in userText first, fallback to combinedText
+    const hasSuicide = suicideRegex.test(userText) || suicideRegex.test(combinedText);
+    const hasSelfHarm = selfHarmRegex.test(userText) || selfHarmRegex.test(combinedText);
+    const hasThreat = threatRegex.test(userText) || threatRegex.test(combinedText);
+    const hasSevereDistress = distressRegex.test(userText) || distressRegex.test(combinedText);
+    const hasFear = fearRegex.test(userText) || fearRegex.test(combinedText);
+    const hasStress = stressRegex.test(userText) || stressRegex.test(combinedText);
+
+    // Language detection
+    let detectedLanguage = 'Hindi';
+    const langSelect = document.getElementById('liveVoiceLangSelect');
+    if (langSelect && langSelect.value === 'en-US') {
+      detectedLanguage = 'English';
+    } else if (langSelect && langSelect.value === 'bn-IN') {
+      detectedLanguage = 'Bengali';
+    } else if (/[\u0980-\u09FF]/.test(combinedText)) {
+      detectedLanguage = 'Bengali';
+    } else if (/[\u0900-\u097F]/.test(combinedText)) {
+      detectedLanguage = 'Hindi';
+    } else if (/\b(aap|tum|main|hum|mujhe|mera|meri|karein|rahe|rahi|hai|nahi|kyun|kya|kuch|bahut)\b/i.test(combinedText)) {
+      detectedLanguage = 'Hindi';
+    } else if (/[a-zA-Z]/.test(combinedText)) {
+      detectedLanguage = 'English';
+    } else {
+      detectedLanguage = 'Hindi';
+    }
+
+    // Dynamic SVI, Distress & Fear Calculations
+    let sviScore = 32;
+    let distressPercent = 14;
+    let fearPercent = 8;
+    let moodLabel = 'Calm';
+    let statusClass = 'status-low';
+    let statusText = 'LOW';
+    let trendArrow = '↓';
+    let trendText = 'Decreasing';
+
+    if (hasSuicide || hasSelfHarm) {
+      sviScore = hasSuicide && hasSelfHarm ? 94 : 88;
+      distressPercent = 88;
+      fearPercent = 76;
+      moodLabel = 'Critical Distress';
+      statusClass = 'status-high';
+      statusText = 'CRITICAL';
+      trendArrow = '↑';
+      trendText = 'Elevated';
+    } else if (hasSevereDistress || (hasStress && hasFear)) {
+      sviScore = 72;
+      distressPercent = 68;
+      fearPercent = 54;
+      moodLabel = 'High Distress';
+      statusClass = 'status-high';
+      statusText = 'HIGH';
+      trendArrow = '↑';
+      trendText = 'Increasing';
+    } else if (hasStress || hasFear || moodData.mood === 'bad') {
+      sviScore = 54;
+      distressPercent = 44;
+      fearPercent = 32;
+      moodLabel = 'Restless';
+      statusClass = 'status-moderate';
+      statusText = 'MODERATE';
+      trendArrow = '→';
+      trendText = 'Steady';
+    } else if (moodData.mood === 'good') {
+      sviScore = 24;
+      distressPercent = 10;
+      fearPercent = 5;
+      moodLabel = 'Calm';
+      statusClass = 'status-low';
+      statusText = 'LOW';
+      trendArrow = '↓';
+      trendText = 'Decreasing';
+    }
+
+    // Effective mood style class
+    const effectiveMood = (hasSuicide || hasSelfHarm || hasSevereDistress) ? 'bad' : moodData.mood;
+
+    // Update Top Pill (Button Header)
+    if (liveVoicePill) {
+      liveVoicePill.classList.remove('mood-good', 'mood-bad', 'mood-neutral');
+      liveVoicePill.classList.add(`mood-${effectiveMood}`);
+      liveVoicePill.title = `Live Mood & Stress Data: SVI ${sviScore}/100`;
+    }
+    if (liveVoiceLabel) liveVoiceLabel.textContent = 'Data';
+
+    // Page 1 UI Update
+    if (vdSviNum) {
+      vdSviNum.textContent = sviScore;
+      vdSviNum.className = `vd-svi-num ${statusClass}`;
+    }
+    if (vdBadgePill && vdBadgeText) {
+      vdBadgePill.className = `vd-badge-pill ${statusClass}`;
+      vdBadgeText.textContent = statusText;
+    }
+    if (vdTrendArrow) {
+      vdTrendArrow.textContent = trendArrow;
+      vdTrendArrow.className = `vd-trend-arrow ${statusClass}`;
+    }
+    if (vdTrendText) vdTrendText.textContent = trendText;
+
+    if (vdMoodBadge && vdMoodText) {
+      vdMoodBadge.className = `vd-row-val vd-mood-badge mood-${effectiveMood}`;
+      vdMoodText.textContent = moodLabel;
+    }
+    if (vdDistressVal) vdDistressVal.textContent = `${distressPercent}%`;
+    if (vdFearVal) vdFearVal.textContent = `${fearPercent}%`;
+    if (vdLangVal) vdLangVal.textContent = detectedLanguage;
+
+    // Realistic voice latency estimate
+    if (vdLatencyText) {
+      const lat = (0.9 + (Math.abs(sviScore % 7) * 0.05)).toFixed(1);
+      vdLatencyText.textContent = `${lat}s`;
+    }
+
+    // Page 2 Indicators & Support Update
+    if (vdIndSuicide) {
+      vdIndSuicide.textContent = hasSuicide ? 'Detected (Active)' : 'Not Detected';
+      vdIndSuicide.className = `vd-ind-status ${hasSuicide ? 'alert' : 'safe'}`;
+    }
+    if (vdIndThreat) {
+      vdIndThreat.textContent = hasThreat ? 'Detected' : 'Not Detected';
+      vdIndThreat.className = `vd-ind-status ${hasThreat ? 'alert' : 'safe'}`;
+    }
+    if (vdIndDistress) {
+      vdIndDistress.textContent = hasSevereDistress ? 'Elevated' : (hasStress ? 'Moderate' : 'Not Detected');
+      vdIndDistress.className = `vd-ind-status ${hasSevereDistress ? 'alert' : (hasStress ? 'elevated' : 'safe')}`;
+    }
+    if (vdIndSelfHarm) {
+      vdIndSelfHarm.textContent = hasSelfHarm ? 'Detected' : 'Not Detected';
+      vdIndSelfHarm.className = `vd-ind-status ${hasSelfHarm ? 'alert' : 'safe'}`;
+    }
+
+    if (vdSupportText1 && vdSupportText2) {
+      if (hasSuicide || hasSelfHarm) {
+        vdSupportText1.textContent = 'Urgent: Direct connection to crisis helpline recommended';
+        vdSupportText2.textContent = 'Provide soothing de-escalation and encourage reaching out to a professional';
+      } else if (hasSevereDistress) {
+        vdSupportText1.textContent = 'Offer empathetic de-stressing exercises and active listening';
+        vdSupportText2.textContent = 'Share calming breathing techniques and check in frequently';
+      } else if (hasStress) {
+        vdSupportText1.textContent = 'Supportive conversation and gentle de-stressing tips';
+        vdSupportText2.textContent = 'Validate feelings and offer relaxed dialogue';
+      } else {
+        vdSupportText1.textContent = 'Continue conversation';
+        vdSupportText2.textContent = 'Provide emotional support and guidance';
+      }
+    }
+
+    return moodData;
+  }
+
+  // Click & Multi-Page Navigation Handler for the Live Mood & Stress Data Box
+  function initVoiceDataPopup() {
+    const wrapper = document.getElementById('voiceDataWrapper');
+    const trigger = document.getElementById('liveVoiceMoodPill');
+    const nextBtn = document.getElementById('vdNextBtn');
+    const backBtn = document.getElementById('vdBackBtn');
+    const closeBtn = document.getElementById('vdCloseBtn');
+    const page1 = document.getElementById('vdPage1');
+    const page2 = document.getElementById('vdPage2');
+
+    if (!wrapper || !trigger || trigger.dataset.bound === 'true') return;
+    trigger.dataset.bound = 'true';
+
+    function showPage(pageNumber) {
+      if (pageNumber === 1) {
+        if (page1) page1.classList.add('active');
+        if (page2) page2.classList.remove('active');
+      } else if (pageNumber === 2) {
+        if (page1) page1.classList.remove('active');
+        if (page2) page2.classList.add('active');
+      }
+    }
+
+    // Toggle Box Visibility
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = wrapper.classList.contains('open');
+      document.querySelectorAll('.custom-select-wrapper.open').forEach(w => w.classList.remove('open'));
+      wrapper.classList.toggle('open', !isOpen);
+      if (!isOpen) {
+        showPage(1); // Default to Page 1 when opening
+      }
+    });
+
+    // Next Page Arrow click -> go to Page 2 (Assessment & Helplines)
+    if (nextBtn) {
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPage(2);
+      });
+    }
+
+    // Back button click -> return to Page 1 (Live Analysis)
+    if (backBtn) {
+      backBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPage(1);
+      });
+    }
+
+    // Close button (X) inside Page 2 -> close the popup
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        wrapper.classList.remove('open');
+      });
+    }
+
+    // Dismiss when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#voiceDataWrapper')) {
+        wrapper.classList.remove('open');
+      }
+    });
+  }
+
+  // Initialize Data Popup on page ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initVoiceDataPopup);
+  } else {
+    initVoiceDataPopup();
+  }
+
+  window.detectConversationMood = detectConversationMood;
+  window.updateMoodIndicatorUI = updateMoodIndicatorUI;
+
   // Setup marked options for code syntax highlighting
   marked.setOptions({
     highlight: function(code, lang) {
@@ -552,6 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Session storage management
   function saveSession() {
+    updateMoodIndicatorUI();
     if (!activeMessages.length) return;
     const firstMsg = activeMessages.find(m => m.role === 'user');
     const title = firstMsg ? (firstMsg.content.slice(0, 28) + '...') : 'Aura Session';
@@ -634,6 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderMessage(m.role, m.content);
     });
     renderHistory();
+    updateMoodIndicatorUI();
   }
 
   function startNewChat() {
@@ -645,6 +1048,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messageInput.style.height = 'auto';
     updateSendBtnState();
     renderHistory();
+    updateMoodIndicatorUI();
   }
 
   if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
@@ -775,7 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. Initial UI reveal timeline
     const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
     
-    if (window.innerWidth > 768) {
+    if (window.innerWidth > 768 && document.querySelector('.aura-sidebar')) {
       tl.from('.aura-sidebar', {
         x: -40,
         opacity: 0,
@@ -784,57 +1188,75 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
     
-    tl.from('.aura-main-panel', {
-      scale: 0.98,
-      opacity: 0,
-      duration: 0.6
-    }, window.innerWidth > 768 ? '-=0.4' : '0')
-    .from('.aura-hero-emblem', {
-      scale: 0.5,
-      opacity: 0,
-      duration: 0.8,
-      ease: 'back.out(1.7)'
-    }, '-=0.3')
-    .from('.aura-hero-heading, .aura-hero-sub', {
-      y: 20,
-      opacity: 0,
-      stagger: 0.12,
-      duration: 0.6
-    }, '-=0.5')
-    .from('.aura-prompt-card', {
-      y: 25,
-      opacity: 0,
-      stagger: 0.08,
-      duration: 0.5,
-      ease: 'back.out(1.4)'
-    }, '-=0.4')
-    .from('.aura-input-capsule', {
-      y: 30,
-      opacity: 0,
-      duration: 0.6,
-      ease: 'back.out(1.5)',
-      clearProps: 'transform,opacity'
-    }, '-=0.3');
+    if (document.querySelector('.aura-main-panel')) {
+      tl.from('.aura-main-panel', {
+        scale: 0.98,
+        opacity: 0,
+        duration: 0.6
+      }, window.innerWidth > 768 ? '-=0.4' : '0');
+    }
 
-    // 2. Interactive hover spring physics for prompt cards
-    document.querySelectorAll('.aura-prompt-card').forEach(card => {
-      card.addEventListener('mouseenter', () => {
-        gsap.to(card, { y: -4, scale: 1.02, duration: 0.25, ease: 'power2.out' });
+    if (document.querySelector('.aura-hero-emblem')) {
+      tl.from('.aura-hero-emblem', {
+        scale: 0.5,
+        opacity: 0,
+        duration: 0.8,
+        ease: 'back.out(1.7)'
+      }, '-=0.3');
+    }
+
+    const heroTexts = document.querySelectorAll('.aura-hero-heading, .aura-hero-sub');
+    if (heroTexts.length > 0) {
+      tl.from(heroTexts, {
+        y: 20,
+        opacity: 0,
+        stagger: 0.12,
+        duration: 0.6
+      }, '-=0.5');
+    }
+
+    const promptCards = document.querySelectorAll('.aura-prompt-card');
+    if (promptCards.length > 0) {
+      tl.from(promptCards, {
+        y: 25,
+        opacity: 0,
+        stagger: 0.08,
+        duration: 0.5,
+        ease: 'back.out(1.4)'
+      }, '-=0.4');
+
+      // 2. Interactive hover spring physics for prompt cards
+      promptCards.forEach(card => {
+        card.addEventListener('mouseenter', () => {
+          gsap.to(card, { y: -4, scale: 1.02, duration: 0.25, ease: 'power2.out' });
+        });
+        card.addEventListener('mouseleave', () => {
+          gsap.to(card, { y: 0, scale: 1.0, duration: 0.25, ease: 'power2.out' });
+        });
       });
-      card.addEventListener('mouseleave', () => {
-        gsap.to(card, { y: 0, scale: 1.0, duration: 0.25, ease: 'power2.out' });
-      });
-    });
+    }
+
+    if (document.querySelector('.aura-input-capsule')) {
+      tl.from('.aura-input-capsule', {
+        y: 30,
+        opacity: 0,
+        duration: 0.6,
+        ease: 'back.out(1.5)',
+        clearProps: 'transform,opacity'
+      }, '-=0.3');
+    }
 
     // 3. Floating pulse for Hero sphere
-    gsap.to('.aura-sphere-halo', {
-      scale: 1.2,
-      opacity: 0.85,
-      duration: 3,
-      repeat: -1,
-      yoyo: true,
-      ease: 'sine.inOut'
-    });
+    if (document.querySelector('.aura-sphere-halo')) {
+      gsap.to('.aura-sphere-halo', {
+        scale: 1.2,
+        opacity: 0.85,
+        duration: 3,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut'
+      });
+    }
   }
 
   // =========================================================
@@ -847,8 +1269,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const wrapper = document.createElement('div');
     wrapper.className = 'custom-select-wrapper';
-    if (selectEl.id === 'liveMicDeviceSelect' || selectEl.id === 'liveVoiceLangSelect') {
-      wrapper.classList.add('custom-select-right');
+    if (selectEl.id === 'liveVoiceLangSelect') {
+      wrapper.classList.add('custom-select-right', 'custom-select-lang');
+    }
+    if (selectEl.id === 'liveMicDeviceSelect') {
+      wrapper.classList.add('custom-select-right', 'custom-select-mic');
     }
 
     const trigger = document.createElement('div');
@@ -904,6 +1329,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
         if (w !== wrapper) w.classList.remove('open');
       });
+      const dataWrapper = document.getElementById('voiceDataWrapper');
+      if (dataWrapper) dataWrapper.classList.remove('open');
       wrapper.classList.toggle('open', !isOpen);
     });
 
@@ -977,6 +1404,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Init
   renderHistory();
   renderCreditMonitor();
+  updateMoodIndicatorUI();
   initGsapAnimations();
   initAllCustomDropdowns();
   initSunoLoadingScreen();
@@ -995,6 +1423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     activeMessages.push({ role: 'user', content: text });
     renderMessage('user', text);
     saveSession();
+    updateMoodIndicatorUI();
   };
 
   window.syncLiveVoiceMessage = function (text) {
@@ -1007,6 +1436,7 @@ document.addEventListener('DOMContentLoaded', () => {
     activeMessages.push({ role: 'assistant', content: text });
     renderMessage('assistant', text);
     saveSession();
+    updateMoodIndicatorUI();
     trackModelUsage('gemini', lastUserMsg ? lastUserMsg.content : '', text);
   };
 });

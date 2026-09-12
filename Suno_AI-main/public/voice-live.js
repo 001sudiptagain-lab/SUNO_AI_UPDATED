@@ -66,10 +66,6 @@
             if (this.transcriptUser) {
               this.transcriptUser.textContent = `"${text}"`;
             }
-            // Clear AI subtitles immediately when user starts speaking a new turn
-            if (this.transcriptAi) {
-              this.transcriptAi.textContent = '';
-            }
             // Auto-detect spoken language and synchronize the top dropdown accordingly
             if (text && text.trim()) {
               this.autoDetectAndSetLanguage(text);
@@ -77,14 +73,25 @@
             if (isFinal && window.syncLiveVoiceUserMessage) {
               window.syncLiveVoiceUserMessage(text);
             }
+            if (window.updateMoodIndicatorUI) {
+              window.updateMoodIndicatorUI();
+            }
           } else if (role === 'assistant') {
             if (this.transcriptAi) {
-              const clean = (text || '').trim();
-              if (!clean) return;
-
-              this.transcriptAi.textContent = clean;
-              if (isFinal && window.syncLiveVoiceMessage) {
-                window.syncLiveVoiceMessage(clean);
+              if (isFinal) {
+                this.transcriptAi.textContent = text;
+                if (window.syncLiveVoiceMessage) {
+                  window.syncLiveVoiceMessage(text);
+                }
+                if (window.updateMoodIndicatorUI) {
+                  window.updateMoodIndicatorUI();
+                }
+              } else {
+                if (this.transcriptAi.textContent === 'Thinking...' || this.transcriptAi.textContent === '') {
+                  this.transcriptAi.textContent = text;
+                } else {
+                  this.transcriptAi.textContent += text;
+                }
               }
             }
           }
@@ -161,47 +168,6 @@
       if (voiceBackBtn) {
         voiceBackBtn.addEventListener('click', () => this.endLiveSession());
       }
-      // Voice Preview Sample Audio Player (Aoede in English, Leda in Hindi & Bengali)
-      const voicePreviewBtn = document.getElementById('voicePreviewBtn');
-      if (voicePreviewBtn) {
-        let currentPreviewAudio = null;
-        voicePreviewBtn.addEventListener('click', () => {
-          if (currentPreviewAudio && !currentPreviewAudio.paused) {
-            currentPreviewAudio.pause();
-            currentPreviewAudio.currentTime = 0;
-            voicePreviewBtn.classList.remove('playing');
-            return;
-          }
-
-          const currentLang = this.langSelect ? this.langSelect.value : 'en-US';
-          let previewFile = 'preview_aoede.wav';
-          if (currentLang === 'hi-IN') {
-            previewFile = 'preview_hindi_leda.wav';
-          } else if (currentLang === 'bn-IN') {
-            previewFile = 'preview_bengali_leda.wav';
-          }
-
-          if (currentPreviewAudio) {
-            currentPreviewAudio.pause();
-          }
-
-          currentPreviewAudio = new Audio(previewFile);
-          voicePreviewBtn.classList.add('playing');
-
-          currentPreviewAudio.onended = () => {
-            voicePreviewBtn.classList.remove('playing');
-          };
-          currentPreviewAudio.onerror = () => {
-            voicePreviewBtn.classList.remove('playing');
-          };
-
-          currentPreviewAudio.play().catch(e => {
-            console.warn('[Voice Preview Play Error]:', e);
-            voicePreviewBtn.classList.remove('playing');
-          });
-        });
-      }
-
       if (this.dockEndVoiceBtn) {
         this.dockEndVoiceBtn.addEventListener('click', () => this.endLiveSession());
       }
@@ -426,6 +392,12 @@
       if (!text) return;
       this.autoDetectAndSetLanguage(text);
       if (this.transcriptAi) this.transcriptAi.textContent = 'Thinking...';
+      if (window.syncLiveVoiceUserMessage) {
+        window.syncLiveVoiceUserMessage(text);
+      }
+      if (window.updateMoodIndicatorUI) {
+        window.updateMoodIndicatorUI();
+      }
       if (this.voiceAssistant) {
         this.voiceAssistant.send(text);
       }
@@ -521,7 +493,7 @@
         const h = this.waveCanvas.height;
         const cx = w / 2;
         const cy = h / 2;
-        const baseRadius = Math.min(w, h) * 0.24;
+        const baseRadius = 100;
 
         ctx.clearRect(0, 0, w, h);
 
@@ -715,6 +687,11 @@
       const currentChat = window.getLiveVoiceActiveMessages ? window.getLiveVoiceActiveMessages() : [];
       const savedSettings = JSON.parse(localStorage.getItem('aura_settings') || localStorage.getItem('chatgpt_settings') || '{}');
 
+      // Sync Mood Detector on Live Voice Stage
+      if (window.updateMoodIndicatorUI) {
+        window.updateMoodIndicatorUI();
+      }
+
       // Connect Modular Voice Assistant Service
       if (this.voiceAssistant) {
         const selectedLang = this.langSelect ? this.langSelect.value : 'auto';
@@ -736,6 +713,8 @@
       }
 
       this.stopOrbRenderer();
+      const dataPopup = document.getElementById('voiceDataWrapper');
+      if (dataPopup) dataPopup.classList.remove('open');
       this.screen.classList.remove('active');
       const mainPanel = document.querySelector('.aura-main-panel');
       if (mainPanel) {
